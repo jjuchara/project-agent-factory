@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-agent-factory.local/schemas/generation-state.schema.json",
+  "title": "Project Agent Factory generation state",
+  "type": "object",
+  "required": ["schemaVersion", "factoryVersion", "projectSlug", "generatedAt", "blueprintSha256", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "factoryVersion": { "type": "string" },
+    "projectSlug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "blueprintSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "ownership", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "ownership": { "enum": ["managed", "seed"] },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

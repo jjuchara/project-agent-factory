@@ -1,0 +1,34 @@
+{
+  "name": "project-agent-factory",
+  "version": "0.1.0+codex.20260728185437",
+  "description": "Creates autonomous Codex project plugins from an approved project profile and evidence set.",
+  "author": {
+    "name": "Project Agent Factory contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "project-context",
+    "workflow",
+    "generator",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Project Agent Factory",
+    "shortDescription": "Build a tailored Codex plugin for any project.",
+    "longDescription": "Interviews the user, analyses approved project evidence, and generates an autonomous project-owned Codex plugin with context, agents, workflows, memory, hooks, and validation.",
+    "developerName": "Project Agent Factory contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Initialize project agents for this project.",
+      "Update this project's agent kit safely.",
+      "Explain the project agent factory workflow."
+    ]
+  }
+}

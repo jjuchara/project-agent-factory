@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "Example software project",
+    "slug": "example-software",
+    "kind": "software",
+    "summary": "Builds and verifies a command-line application.",
+    "workingLanguage": "English",
+    "domain": "Developer tooling",
+    "artifactTypes": ["source code", "tests", "release notes"],
+    "capabilityPacks": ["coding", "documentation", "release"]
+  },
+  "policies": {
+    "communicationLanguage": "English",
+    "writeApproval": "task-scoped",
+    "confidentiality": "internal",
+    "sourceCitation": "recommended",
+    "delegation": "task-scoped"
+  },
+  "qualityCriteria": [
+    "Declared tests and type checks pass.",
+    "User-visible behavior and documentation remain synchronized."
+  ],
+  "sources": [
+    {
+      "id": "readme",
+      "location": "README.md",
+      "authority": "canonical",
+      "status": "observed",
+      "note": "Product contract and usage."
+    }
+  ],
+  "commands": {
+    "test": "npm test",
+    "typecheck": "npm run typecheck"
+  },
+  "openQuestions": []
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "Example research workspace",
+    "slug": "example-research",
+    "kind": "research",
+    "summary": "Produces evidence-backed analytical reports.",
+    "workingLanguage": "English",
+    "domain": "Market research",
+    "artifactTypes": ["research brief", "source matrix", "final report"],
+    "capabilityPacks": ["research", "documentation", "source-verification"]
+  },
+  "policies": {
+    "communicationLanguage": "English",
+    "writeApproval": "explicit",
+    "confidentiality": "internal",
+    "sourceCitation": "required",
+    "delegation": "read-only"
+  },
+  "qualityCriteria": [
+    "Every material claim is traceable to a source.",
+    "Facts, inferences, and unresolved questions are visibly separated."
+  ],
+  "sources": [
+    {
+      "id": "project-charter",
+      "location": "docs/project-charter.md",
+      "authority": "canonical",
+      "status": "user-confirmed",
+      "note": "Defines scope and deliverables."
+    }
+  ],
+  "commands": {},
+  "openQuestions": []
+}

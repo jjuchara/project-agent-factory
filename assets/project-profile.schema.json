@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-agent-factory.local/schemas/project-profile.schema.json",
+  "title": "Approved project profile",
+  "description": "The generated profile uses the same contract as the approved project blueprint.",
+  "$ref": "project-blueprint.schema.json"
+}

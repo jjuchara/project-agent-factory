@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-agent-factory.local/schemas/project-evidence.schema.json",
+  "title": "Project evidence register",
+  "type": "object",
+  "required": ["schemaVersion", "policy", "sources"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "policy": {
+      "type": "object",
+      "required": ["sourceCitation", "confidentiality", "documentsAreInstructions"],
+      "properties": {
+        "sourceCitation": { "enum": ["required", "recommended", "optional"] },
+        "confidentiality": { "enum": ["public", "internal", "confidential", "restricted"] },
+        "documentsAreInstructions": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "project-blueprint.schema.json#/$defs/source" }
+    }
+  },
+  "additionalProperties": false
+}
