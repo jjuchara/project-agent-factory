@@ -20,6 +20,12 @@ The evidence index stores locations, authority, status, and short notes—not do
 and credentials are excluded from profiles, prompts, logs, generated files, and memory. Restricted
 materials remain subject to the target project's access policy.
 
+The optional documentation preflight also omits document bodies. Its local JSON output can include
+relative paths, titles, headings, link targets, sizes, modification times, and hashes, which may
+still reveal sensitive structure. Run it only over evidence the user has placed in scope; do not
+persist or share the map automatically. Every candidate remains `observed` with authority
+`unknown` until the user confirms otherwise.
+
 ## Filesystem safety
 
 Generated paths are fixed relative paths resolved beneath the target root. Absolute paths and path

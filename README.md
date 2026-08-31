@@ -32,6 +32,11 @@ Install the factory in Codex or Claude Code, open the target project, and invoke
 shows a sourced project card and blueprint, and waits for approval before writing anything. One
 approved blueprint produces shared project knowledge plus separate Codex and Claude Code plugins.
 
+For a substantial or unclear documentation corpus, invoke `project-docs-prepare` first. It builds a
+read-only map of document metadata, Markdown headings, local links, exact-content duplicates,
+possible orphans, and likely reading routes. It does not assign source authority or reorganize
+files. Any proposed documentation changes remain a separate preview-and-approval operation.
+
 The skill resolves its CLI from the installed skill locator; it does not depend on the target
 project's working directory or on a globally exported `PLUGIN_ROOT` variable.
 
@@ -39,12 +44,15 @@ The deterministic CLI used by the skill is:
 
 ```bash
 node scripts/project-agents.mjs inspect --root /path/to/project
+node scripts/project-agents.mjs inspect-docs --root /path/to/project
 node scripts/project-agents.mjs generate --root /path/to/project --blueprint /tmp/blueprint.json
 node scripts/project-agents.mjs generate --root /path/to/project --blueprint /tmp/blueprint.json --write
 node scripts/project-agents.mjs validate-kit --root /path/to/project
 ```
 
-`generate` is a dry-run unless `--write` is present. Existing `AGENTS.md` files require the explicit
+`inspect-docs` writes nothing and returns JSON conforming to
+`assets/documentation-map.schema.json`. Authority remains `unknown` until the user confirms the
+source register. `generate` is a dry-run unless `--write` is present. Existing `AGENTS.md` files require the explicit
 `--merge-agents` flag. Modified managed files cause a conflict unless the user separately approves
 `--force-managed`.
 
@@ -62,6 +70,10 @@ python3 /path/to/plugin-creator/scripts/validate_plugin.py .
 The blueprint and logical catalogs remain vendor-neutral. Optional `codex` and `claude` sections
 configure only their respective agent adapters. Plugin installation is never part of generation:
 Codex and Claude Code bootstraps are separate approval boundaries.
+
+Generated public skill names use the project slug, so multiple project plugins can coexist without
+ambiguous commands: `project-help` becomes `<project-slug>-help` (for example,
+`tflex-macros-help`). Logical workflow IDs in the shared catalog remain unchanged.
 
 ## Global PARA project bootstrap
 

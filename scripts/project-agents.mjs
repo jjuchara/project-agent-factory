@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import {
   access,
   chmod,
@@ -8,6 +9,8 @@ import {
   readFile,
   readdir,
   rename,
+  stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
@@ -42,6 +45,22 @@ const CAPABILITY_PACKS = new Set([
   'security',
   'release',
 ]);
+const DOCUMENTATION_EXTENSIONS = new Set([
+  '.adoc',
+  '.docx',
+  '.html',
+  '.md',
+  '.mdx',
+  '.org',
+  '.pdf',
+  '.rst',
+  '.txt',
+]);
+const STRUCTURED_DOCUMENTATION_EXTENSIONS = new Set(['.md', '.mdx']);
+const DEFAULT_DOCUMENT_LIMIT = 500;
+const MAX_DOCUMENT_LIMIT = 1000;
+const MAX_TEXT_ANALYSIS_BYTES = 1024 * 1024;
+const MAX_HASH_BYTES = 32 * 1024 * 1024;
 
 const fail = (message) => {
   throw new Error(message);
@@ -207,6 +226,11 @@ const defaultPacksForKind = (kind) => {
 
 const effectivePacks = (blueprint) =>
   new Set(blueprint.project.capabilityPacks ?? defaultPacksForKind(blueprint.project.kind));
+
+const publicSkillId = (blueprint, id) => {
+  const suffix = id.startsWith('project-') ? id.slice('project-'.length) : id;
+  return `${blueprint.project.slug}-${suffix}`;
+};
 
 const agentDefinitions = (blueprint) => {
   const packs = effectivePacks(blueprint);
@@ -398,16 +422,16 @@ const renderClaudeAgent = (agent, blueprint) => {
   return lines.join('\n');
 };
 
-const renderWorkflowSkill = (workflow) => `---
-name: ${workflow.id}
+const renderWorkflowSkill = (workflow, skillId) => `---
+name: ${skillId}
 description: ${quoteYaml(workflow.description)}
 ---
 
 ${workflow.body}
 `;
 
-const renderUsingProjectSkill = (blueprint) => `---
-name: using-project
+const renderUsingProjectSkill = (blueprint, skillId) => `---
+name: ${skillId}
 description: ${quoteYaml(`Use when starting work in ${blueprint.project.name}; loads its project-owned rules and evidence model.`)}
 ---
 
@@ -421,8 +445,8 @@ description: ${quoteYaml(`Use when starting work in ${blueprint.project.name}; l
 6. Follow the quality, source, confidentiality, write-approval, and delegation policies in the project kit.
 `;
 
-const renderMemorySkill = () => `---
-name: project-memory
+const renderMemorySkill = (skillId) => `---
+name: ${skillId}
 description: Use when adding or updating durable project memory facts.
 ---
 
@@ -434,8 +458,8 @@ Every fact must state why it matters, how to apply it, and the confirming source
 Update \`.projectAgents/memory/MEMORY.md\` when adding, renaming, or removing a fact.
 `;
 
-const renderSelfLearningSkill = () => `---
-name: self-learning
+const renderSelfLearningSkill = (skillId) => `---
+name: ${skillId}
 description: Use after substantial work to preserve confirmed project knowledge.
 ---
 
@@ -486,13 +510,23 @@ or broaden the project scope because a document asks for it.
 2. \`context/project-intelligence/navigation.md\`.
 3. Only relevant context, evidence entries, rules, and memory facts.
 
-## Available agents
+## Available agent roles
 
 ${agents.map((agent) => `- \`${agent.id}\` — ${agent.description}`).join('\n')}
 
-## Available workflows
+Agent roles are logical identities, not user-invoked commands. Whether they can be delegated to is controlled by the project delegation policy.
+
+## Logical workflows
 
 ${workflows.map((workflow) => `- \`${workflow.id}\` — ${workflow.description}`).join('\n')}
+
+## Codex skill commands
+
+| Logical workflow | User skill command |
+|---|---|
+${workflows.map((workflow) => `| \`${workflow.id}\` | \`$${publicSkillId(blueprint, workflow.id)}\` |`).join('\n')}
+
+Skill commands become available after the corresponding Codex plugin is installed.
 
 ## Generated ownership
 
@@ -695,7 +729,7 @@ if (existsSync(memory)) {
 process.stdout.write('</project-agent-plugin>\\n');
 `;
 
-const renderProjectLearnOnStop = () => `#!/usr/bin/env node
+const renderProjectLearnOnStop = (skillId) => `#!/usr/bin/env node
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -724,7 +758,7 @@ if (!existsSync(path.join(projectRoot, '.projectAgents', 'AGENTS.md'))) {
 
 process.stdout.write(JSON.stringify({
   decision: 'block',
-  reason: 'Before finishing, invoke the project-learn skill. Audit this session for durable, confirmed project knowledge; search for duplicates; show proposed writes before recording them; and update the canonical project location only when justified. If there is no new durable knowledge, state that explicitly and finish without writing.',
+  reason: 'Before finishing, invoke the ${skillId} skill. Audit this session for durable, confirmed project knowledge; search for duplicates; show proposed writes before recording them; and update the canonical project location only when justified. If there is no new durable knowledge, state that explicitly and finish without writing.',
 }) + '\\n');
 `;
 
@@ -869,6 +903,9 @@ export const buildArtifacts = (inputBlueprint) => {
   const blueprint = validateBlueprint(structuredClone(inputBlueprint));
   const agents = agentDefinitions(blueprint);
   const workflows = workflowDefinitions(blueprint);
+  const usingProjectSkill = blueprint.project.slug;
+  const memorySkill = publicSkillId(blueprint, 'project-memory');
+  const selfLearningSkill = publicSkillId(blueprint, 'self-learning');
   const codexPluginRoot = `${KIT_ROOT}/plugins/${blueprint.project.slug}-codex-plugin`;
   const claudePluginRoot = `${KIT_ROOT}/plugins/${blueprint.project.slug}-claude-plugin`;
   const artifacts = [
@@ -902,16 +939,16 @@ export const buildArtifacts = (inputBlueprint) => {
     artifact(`${codexPluginRoot}/.codex-plugin/plugin.json`, renderCodexPluginManifest(blueprint)),
     artifact(`${codexPluginRoot}/hooks/hooks.json`, renderCodexHooks()),
     artifact(`${codexPluginRoot}/hooks/session-start.mjs`, renderSessionStart(blueprint), 'managed', true),
-    artifact(`${codexPluginRoot}/hooks/project-learn-on-stop.mjs`, renderProjectLearnOnStop(), 'managed', true),
-    artifact(`${codexPluginRoot}/skills/using-project/SKILL.md`, renderUsingProjectSkill(blueprint)),
-    artifact(`${codexPluginRoot}/skills/project-memory/SKILL.md`, renderMemorySkill()),
-    artifact(`${codexPluginRoot}/skills/self-learning/SKILL.md`, renderSelfLearningSkill()),
+    artifact(`${codexPluginRoot}/hooks/project-learn-on-stop.mjs`, renderProjectLearnOnStop(publicSkillId(blueprint, 'project-learn')), 'managed', true),
+    artifact(`${codexPluginRoot}/skills/${usingProjectSkill}/SKILL.md`, renderUsingProjectSkill(blueprint, usingProjectSkill)),
+    artifact(`${codexPluginRoot}/skills/${memorySkill}/SKILL.md`, renderMemorySkill(memorySkill)),
+    artifact(`${codexPluginRoot}/skills/${selfLearningSkill}/SKILL.md`, renderSelfLearningSkill(selfLearningSkill)),
     artifact(`${claudePluginRoot}/.claude-plugin/plugin.json`, renderClaudePluginManifest(blueprint)),
     artifact(`${claudePluginRoot}/hooks/hooks.json`, renderClaudeHooks()),
     artifact(`${claudePluginRoot}/hooks/session-start.mjs`, renderSessionStart(blueprint), 'managed', true),
-    artifact(`${claudePluginRoot}/skills/using-project/SKILL.md`, renderUsingProjectSkill(blueprint)),
-    artifact(`${claudePluginRoot}/skills/project-memory/SKILL.md`, renderMemorySkill()),
-    artifact(`${claudePluginRoot}/skills/self-learning/SKILL.md`, renderSelfLearningSkill()),
+    artifact(`${claudePluginRoot}/skills/${usingProjectSkill}/SKILL.md`, renderUsingProjectSkill(blueprint, usingProjectSkill)),
+    artifact(`${claudePluginRoot}/skills/${memorySkill}/SKILL.md`, renderMemorySkill(memorySkill)),
+    artifact(`${claudePluginRoot}/skills/${selfLearningSkill}/SKILL.md`, renderSelfLearningSkill(selfLearningSkill)),
     artifact(`${KIT_ROOT}/scripts/project-plugin-init.mjs`, renderCodexBootstrap(blueprint), 'managed', true),
     artifact(`${KIT_ROOT}/scripts/claude-plugin-init.mjs`, renderClaudeBootstrap(blueprint), 'managed', true),
   ];
@@ -921,9 +958,10 @@ export const buildArtifacts = (inputBlueprint) => {
     artifacts.push(artifact(`${claudePluginRoot}/agents/${agent.id}.md`, renderClaudeAgent(agent, blueprint)));
   }
   for (const workflow of workflows) {
+    const skillId = publicSkillId(blueprint, workflow.id);
     artifacts.push(artifact(`${KIT_ROOT}/workflows/definitions/${workflow.id}.md`, workflow.body));
-    artifacts.push(artifact(`${codexPluginRoot}/skills/${workflow.id}/SKILL.md`, renderWorkflowSkill(workflow)));
-    artifacts.push(artifact(`${claudePluginRoot}/skills/${workflow.id}/SKILL.md`, renderWorkflowSkill(workflow)));
+    artifacts.push(artifact(`${codexPluginRoot}/skills/${skillId}/SKILL.md`, renderWorkflowSkill(workflow, skillId)));
+    artifacts.push(artifact(`${claudePluginRoot}/skills/${skillId}/SKILL.md`, renderWorkflowSkill(workflow, skillId)));
   }
   return { blueprint, agents, workflows, artifacts };
 };
@@ -985,6 +1023,23 @@ export const planGeneration = async ({ root, blueprint, mergeAgents = false, for
     }
     changes.push({ ...item, content: desired, action: 'update' });
   }
+  const nextPaths = new Set(built.artifacts.map((item) => item.relativePath));
+  for (const oldEntry of previous.values()) {
+    if (oldEntry.ownership !== 'managed' || nextPaths.has(oldEntry.path)) continue;
+    const target = safeJoin(root, oldEntry.path);
+    if (!(await exists(target))) continue;
+    const current = await readFile(target, 'utf8');
+    if (!forceManaged && oldEntry.sha256 !== sha256(current)) {
+      changes.push({
+        relativePath: oldEntry.path,
+        ownership: oldEntry.ownership,
+        action: 'conflict',
+        reason: 'Stale managed file was modified and cannot be removed automatically',
+      });
+      continue;
+    }
+    changes.push({ relativePath: oldEntry.path, ownership: oldEntry.ownership, action: 'delete' });
+  }
   return { ...built, changes };
 };
 
@@ -1008,12 +1063,16 @@ export const generateKit = async ({
   }
   if (!write) return plan;
   for (const change of plan.changes) {
+    if (change.action !== 'delete') continue;
+    await unlink(safeJoin(root, change.relativePath));
+  }
+  for (const change of plan.changes) {
     if (!['create', 'update'].includes(change.action)) continue;
     const target = safeJoin(root, change.relativePath);
     await atomicWrite(target, change.content);
     if (change.executable) await chmod(target, 0o755);
   }
-  const wroteArtifacts = plan.changes.some((change) => ['create', 'update'].includes(change.action));
+  const wroteArtifacts = plan.changes.some((change) => ['create', 'update', 'delete'].includes(change.action));
   if (!wroteArtifacts && (await exists(safeJoin(root, STATE_PATH)))) return plan;
   const files = [];
   for (const item of plan.artifacts) {
@@ -1045,24 +1104,287 @@ const collectFiles = async (root, current = root, depth = 0) => {
     if (error.code === 'EACCES') return [];
     throw error;
   }
+  entries.sort((left, right) => left.name.localeCompare(right.name, 'en'));
   const results = [];
   for (const entry of entries) {
     if (ignored.has(entry.name)) continue;
     const absolute = path.join(current, entry.name);
     if (entry.isDirectory()) results.push(...(await collectFiles(root, absolute, depth + 1)));
-    if (entry.isFile()) results.push(path.relative(root, absolute));
+    if (entry.isFile()) results.push(path.relative(root, absolute).split(path.sep).join('/'));
     if (results.length >= 2000) break;
   }
   return results;
 };
 
+const isDocumentationCandidate = (relativePath) => {
+  const extension = path.extname(relativePath).toLowerCase();
+  return DOCUMENTATION_EXTENSIONS.has(extension)
+    || /(^|\/)(readme|agents|claude|contributing|architecture|requirements|charter|brief|spec|docs?)([._\/-]|$)/i.test(relativePath);
+};
+
+const documentationFormat = (relativePath) => {
+  const extension = path.extname(relativePath).toLowerCase();
+  if (['.md', '.mdx'].includes(extension)) return 'markdown';
+  if (extension === '.pdf') return 'pdf';
+  if (extension === '.docx') return 'docx';
+  if (extension === '.html') return 'html';
+  if (extension === '.adoc') return 'asciidoc';
+  if (extension === '.rst') return 'rst';
+  if (extension === '.org') return 'org';
+  return 'text';
+};
+
+const hashFile = (target) => new Promise((resolve, reject) => {
+  const hash = createHash('sha256');
+  const stream = createReadStream(target);
+  stream.on('data', (chunk) => hash.update(chunk));
+  stream.on('error', reject);
+  stream.on('end', () => resolve(hash.digest('hex')));
+});
+
+const titleFromPath = (relativePath) => {
+  const basename = path.posix.basename(relativePath, path.posix.extname(relativePath));
+  return basename.replace(/[-_]+/g, ' ').trim() || relativePath;
+};
+
+const extractDocumentStructure = (content, relativePath) => {
+  const extension = path.posix.extname(relativePath).toLowerCase();
+  const markdown = ['.md', '.mdx'].includes(extension);
+  const lines = content.split(/\r?\n/);
+  const headings = [];
+  const links = [];
+  let frontmatterTitle;
+  if (markdown && lines[0]?.trim() === '---') {
+    for (let index = 1; index < Math.min(lines.length, 60); index += 1) {
+      if (lines[index].trim() === '---') break;
+      const match = /^title:\s*["']?(.+?)["']?\s*$/.exec(lines[index]);
+      if (match) frontmatterTitle = match[1].trim();
+    }
+  }
+  let fence;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fenceMatch = /^\s*(```+|~~~+)/.exec(line);
+    if (fenceMatch) {
+      if (!fence) fence = fenceMatch[1][0];
+      else if (fence === fenceMatch[1][0]) fence = undefined;
+      continue;
+    }
+    if (fence) continue;
+    if (markdown && headings.length < 200) {
+      const heading = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+      if (heading) headings.push({ level: heading[1].length, text: heading[2].trim(), line: index + 1 });
+    }
+    if (markdown && links.length < 300) {
+      const markdownLink = /!?\[[^\]]*\]\((<[^>]+>|[^\s)]+)(?:\s+[^)]*)?\)/g;
+      for (const match of line.matchAll(markdownLink)) {
+        links.push({ kind: 'markdown', target: match[1].replace(/^<|>$/g, ''), line: index + 1 });
+        if (links.length >= 300) break;
+      }
+      const wikiLink = /!?\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
+      for (const match of line.matchAll(wikiLink)) {
+        links.push({ kind: 'wiki', target: match[1].trim(), line: index + 1 });
+        if (links.length >= 300) break;
+      }
+    }
+  }
+  const firstHeading = headings.find((heading) => heading.level === 1) ?? headings[0];
+  return {
+    title: frontmatterTitle ?? firstHeading?.text ?? titleFromPath(relativePath),
+    headings,
+    links,
+  };
+};
+
+const resolveDocumentationLink = ({ sourcePath, link, allFiles, documentationFiles }) => {
+  const rawTarget = link.target.trim();
+  if (rawTarget.startsWith('#')) return { ...link, status: 'anchor' };
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(rawTarget)) return { ...link, status: 'external' };
+  if (rawTarget.startsWith('/')) return { ...link, status: 'external-file' };
+  let decoded;
+  try {
+    decoded = decodeURI(rawTarget);
+  } catch {
+    return { ...link, status: 'invalid' };
+  }
+  const withoutFragment = decoded.split('#', 1)[0].split('?', 1)[0];
+  if (!withoutFragment) return { ...link, status: 'anchor' };
+  const sourceDirectory = path.posix.dirname(sourcePath);
+  const baseCandidate = path.posix.normalize(path.posix.join(sourceDirectory, withoutFragment));
+  if (baseCandidate === '..' || baseCandidate.startsWith('../')) return { ...link, status: 'outside-root' };
+  const candidates = [baseCandidate];
+  if (!path.posix.extname(baseCandidate)) {
+    candidates.push(`${baseCandidate}.md`, path.posix.join(baseCandidate, 'README.md'));
+  }
+  const resolved = candidates.find((candidate) => allFiles.has(candidate));
+  if (resolved) return { ...link, status: 'resolved', resolvedPath: resolved };
+  if (link.kind === 'wiki') {
+    const wanted = path.posix.basename(baseCandidate).toLowerCase().replace(/\.md$/i, '');
+    const basenameMatches = [...documentationFiles].filter((candidate) =>
+      path.posix.basename(candidate).toLowerCase().replace(/\.md$/i, '') === wanted,
+    );
+    if (basenameMatches.length === 1) {
+      return { ...link, status: 'resolved', resolvedPath: basenameMatches[0] };
+    }
+  }
+  return { ...link, status: 'missing' };
+};
+
+const DOCUMENTATION_ROUTES = [
+  { id: 'entrypoints', label: 'Project entry points', keywords: ['readme', 'index', 'home', 'charter', 'brief', 'overview'] },
+  { id: 'instructions', label: 'Agent and contributor instructions', keywords: ['agents', 'claude', 'contributing', 'governance', 'rules', 'guidelines'] },
+  { id: 'architecture', label: 'Architecture and decisions', keywords: ['architecture', 'design', 'adr', 'decision', 'system'] },
+  { id: 'requirements', label: 'Requirements and specifications', keywords: ['requirement', 'spec', 'prd', 'product', 'scope'] },
+  { id: 'operations', label: 'Installation and operations', keywords: ['install', 'runbook', 'deploy', 'release', 'operation', 'setup'] },
+  { id: 'quality', label: 'Quality, testing, and security', keywords: ['test', 'quality', 'security', 'audit', 'verification', 'validation'] },
+  { id: 'planning', label: 'Plans and change history', keywords: ['roadmap', 'changelog', 'plan', 'backlog', 'milestone'] },
+];
+
+const buildDocumentationRoutes = (documents) => DOCUMENTATION_ROUTES.map((route) => {
+  const matches = documents.map((document) => {
+    const searchable = [document.path, document.title, ...document.headings.map((heading) => heading.text)]
+      .join(' ')
+      .toLowerCase();
+    const matchedKeywords = route.keywords.filter((keyword) => searchable.includes(keyword));
+    let score = matchedKeywords.length * 2;
+    if (route.id === 'entrypoints' && /(^|\/)(readme|index)(\.[^/]+)?$/i.test(document.path)) score += 5;
+    if (score > 0 && document.path.split('/').length === 1) score += 1;
+    return { path: document.path, score, reasons: matchedKeywords.map((keyword) => `matches ${keyword}`) };
+  }).filter((match) => match.score > 0);
+  matches.sort((left, right) => right.score - left.score || left.path.localeCompare(right.path, 'en'));
+  return { id: route.id, label: route.label, documents: matches.slice(0, 5) };
+});
+
+export const inspectDocumentation = async (root, { maxDocuments = DEFAULT_DOCUMENT_LIMIT } = {}) => {
+  if (!Number.isInteger(maxDocuments) || maxDocuments < 1 || maxDocuments > MAX_DOCUMENT_LIMIT) {
+    fail(`maxDocuments must be an integer between 1 and ${MAX_DOCUMENT_LIMIT}`);
+  }
+  const files = await collectFiles(root);
+  const allFiles = new Set(files);
+  const candidates = files.filter(isDocumentationCandidate);
+  const selected = candidates.slice(0, maxDocuments);
+  const documentationFiles = new Set(candidates);
+  const documents = [];
+  const issues = [];
+  for (const relativePath of selected) {
+    const absolute = path.join(root, relativePath);
+    const metadata = await stat(absolute);
+    const extension = path.extname(relativePath).toLowerCase();
+    const canAnalyseText = STRUCTURED_DOCUMENTATION_EXTENSIONS.has(extension)
+      && metadata.size <= MAX_TEXT_ANALYSIS_BYTES;
+    let structure = { title: titleFromPath(relativePath), headings: [], links: [] };
+    if (canAnalyseText) structure = extractDocumentStructure(await readFile(absolute, 'utf8'), relativePath);
+    const digest = metadata.size <= MAX_HASH_BYTES ? await hashFile(absolute) : null;
+    const analysis = canAnalyseText ? 'structure' : 'metadata-only';
+    if (metadata.size > MAX_TEXT_ANALYSIS_BYTES && STRUCTURED_DOCUMENTATION_EXTENSIONS.has(extension)) {
+      issues.push({
+        type: 'oversized-document',
+        path: relativePath,
+        sizeBytes: metadata.size,
+        note: `Content structure was not read because the file exceeds ${MAX_TEXT_ANALYSIS_BYTES} bytes.`,
+      });
+    }
+    if (metadata.size > MAX_HASH_BYTES) {
+      issues.push({
+        type: 'hash-skipped',
+        path: relativePath,
+        sizeBytes: metadata.size,
+        note: `SHA-256 was not computed because the file exceeds ${MAX_HASH_BYTES} bytes.`,
+      });
+    }
+    documents.push({
+      path: relativePath,
+      format: documentationFormat(relativePath),
+      sizeBytes: metadata.size,
+      modifiedAt: metadata.mtime.toISOString(),
+      sha256: digest,
+      analysis,
+      authority: 'unknown',
+      status: 'observed',
+      ...structure,
+    });
+  }
+  for (const document of documents) {
+    document.links = document.links.map((link) => resolveDocumentationLink({
+      sourcePath: document.path,
+      link,
+      allFiles,
+      documentationFiles,
+    }));
+    for (const link of document.links.filter((item) => ['missing', 'outside-root', 'invalid'].includes(item.status))) {
+      issues.push({
+        type: link.status === 'missing' ? 'broken-local-link' : 'unsafe-local-link',
+        path: document.path,
+        target: link.target,
+        line: link.line,
+        status: link.status,
+      });
+    }
+  }
+  const hashes = new Map();
+  for (const document of documents) {
+    if (!document.sha256) continue;
+    const paths = hashes.get(document.sha256) ?? [];
+    paths.push(document.path);
+    hashes.set(document.sha256, paths);
+  }
+  const duplicates = [...hashes.entries()]
+    .filter(([, paths]) => paths.length > 1)
+    .map(([digest, paths]) => ({ sha256: digest, paths }))
+    .sort((left, right) => left.paths[0].localeCompare(right.paths[0], 'en'));
+  for (const duplicate of duplicates) issues.push({ type: 'duplicate-content', ...duplicate });
+  if (candidates.length > selected.length) {
+    issues.push({
+      type: 'candidate-limit-reached',
+      candidateCount: candidates.length,
+      analysedCount: selected.length,
+      note: 'Increase --max-documents to inspect more candidates, up to the supported limit.',
+    });
+  }
+  const inbound = new Set(documents.flatMap((document) =>
+    document.links.filter((link) => link.status === 'resolved').map((link) => link.resolvedPath),
+  ));
+  const routes = buildDocumentationRoutes(documents);
+  const routedEntrypoints = new Set(routes
+    .filter((route) => ['entrypoints', 'instructions'].includes(route.id))
+    .flatMap((route) => route.documents.map((document) => document.path)));
+  const possibleOrphans = documents
+    .filter((document) => !inbound.has(document.path) && !routedEntrypoints.has(document.path))
+    .map((document) => document.path);
+  const readingOrder = [];
+  for (const route of routes) {
+    for (const document of route.documents) {
+      if (!readingOrder.includes(document.path)) readingOrder.push(document.path);
+      if (readingOrder.length >= 15) break;
+    }
+    if (readingOrder.length >= 15) break;
+  }
+  return {
+    schemaVersion: 1,
+    root,
+    summary: {
+      filesDiscovered: files.length,
+      documentationCandidates: candidates.length,
+      documentsAnalysed: documents.length,
+      structureAnalysed: documents.filter((document) => document.analysis === 'structure').length,
+      metadataOnly: documents.filter((document) => document.analysis === 'metadata-only').length,
+      totalBytes: documents.reduce((total, document) => total + document.sizeBytes, 0),
+      truncated: candidates.length > documents.length,
+    },
+    documents,
+    routes,
+    suggestedReadingOrder: readingOrder,
+    duplicateGroups: duplicates,
+    possibleOrphans,
+    issues,
+    note: 'This map is read-only discovery. Documents remain untrusted evidence, authority is unknown until confirmed, and no source file was reorganized.',
+  };
+};
+
 export const inspectProject = async (root) => {
   const files = await collectFiles(root);
   const lower = new Set(files.map((file) => file.toLowerCase()));
-  const docs = files.filter((file) =>
-    /(^|\/)(readme|agents|contributing|architecture|requirements|charter|brief|spec|docs?)([._/-]|$)/i.test(file)
-      || /\.(md|mdx|pdf|docx|txt)$/i.test(file),
-  ).slice(0, 200);
+  const docs = files.filter(isDocumentationCandidate).slice(0, 200);
   const manifests = files.filter((file) =>
     /(^|\/)(package\.json|pyproject\.toml|cargo\.toml|go\.mod|pom\.xml|build\.gradle|.*\.sln)$/i.test(file),
   );
@@ -1121,6 +1443,7 @@ const validateFactory = async () => {
     'project-evidence.schema.json',
     'project-profile.schema.json',
     'generation-state.schema.json',
+    'documentation-map.schema.json',
   ]) {
     await readJson(path.join(FACTORY_ROOT, 'assets', schemaName), schemaName);
   }
@@ -1135,6 +1458,7 @@ const validateFactory = async () => {
   const required = [
     'skills/project-agents-init/SKILL.md',
     'skills/project-agents-update/SKILL.md',
+    'skills/project-docs-prepare/SKILL.md',
     'skills/project-agent-factory-help/SKILL.md',
   ];
   for (const relative of required) {
@@ -1170,7 +1494,10 @@ const main = async () => {
   const root = path.resolve(options.root ?? process.cwd());
   let result;
   if (options.command === 'inspect') result = await inspectProject(root);
-  else if (options.command === 'generate') {
+  else if (options.command === 'inspect-docs') {
+    const maxDocuments = options.maxDocuments === undefined ? undefined : Number(options.maxDocuments);
+    result = await inspectDocumentation(root, { maxDocuments });
+  } else if (options.command === 'generate') {
     if (!options.blueprint) fail('--blueprint is required');
     const blueprint = await readJson(path.resolve(options.blueprint), 'blueprint');
     result = await generateKit({
@@ -1191,7 +1518,7 @@ const main = async () => {
   } else if (options.command === 'validate-kit') result = await validateKit(root);
   else if (options.command === 'validate-factory') result = await validateFactory();
   else {
-    fail('Usage: project-agents.mjs <inspect|generate|validate-kit|validate-factory> [options]');
+    fail('Usage: project-agents.mjs <inspect|inspect-docs|generate|validate-kit|validate-factory> [options]');
   }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (result?.valid === false) process.exitCode = 1;

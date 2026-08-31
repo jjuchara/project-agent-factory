@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
   buildArtifacts,
   generateKit,
+  inspectDocumentation,
   inspectProject,
   validateBlueprint,
   validateKit,
@@ -86,6 +88,27 @@ test('builds analytical roles and workflows without coding assumptions', () => {
   assert.ok(!built.workflows.some((workflow) => workflow.id === 'project-debug'));
   assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('-claude-plugin/.claude-plugin/plugin.json')));
   assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('-claude-plugin/agents/project-analyst.md')));
+});
+
+test('names generated skills after the project plugin while preserving logical workflow ids', () => {
+  const built = buildArtifacts(blueprint());
+  assert.ok(built.workflows.some((workflow) => workflow.id === 'project-help'));
+  const help = built.artifacts.find((item) => item.relativePath.endsWith('skills/evidence-workspace-help/SKILL.md'));
+  assert.ok(help);
+  assert.match(help.content, /^---\nname: evidence-workspace-help\n/m);
+  const entrypoint = built.artifacts.find((item) => item.relativePath.endsWith('skills/evidence-workspace/SKILL.md'));
+  assert.ok(entrypoint);
+  assert.match(entrypoint.content, /^---\nname: evidence-workspace\n/m);
+  assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('skills/evidence-workspace-memory/SKILL.md')));
+  assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('skills/evidence-workspace-self-learning/SKILL.md')));
+  const stopHook = built.artifacts.find((item) => item.relativePath.endsWith('hooks/project-learn-on-stop.mjs'));
+  assert.match(stopHook.content, /invoke the evidence-workspace-learn skill/);
+  const projectAgents = built.artifacts.find((item) => item.relativePath === '.projectAgents/AGENTS.md');
+  assert.ok(projectAgents);
+  assert.match(projectAgents.content, /## Available agent roles/);
+  assert.match(projectAgents.content, /## Logical workflows/);
+  assert.match(projectAgents.content, /\| `project-help` \| `\$evidence-workspace-help` \|/);
+  assert.match(projectAgents.content, /Agent roles are logical identities, not user-invoked commands/);
 });
 
 test('maps logical agent permissions to Claude Code tools', () => {
@@ -173,7 +196,7 @@ test('generates and validates an autonomous project kit', async () => {
     'utf8',
   );
   assert.match(stopHook, /stop_hook_active/);
-  assert.match(stopHook, /project-learn skill/);
+  assert.match(stopHook, /evidence-workspace-learn skill/);
   const sessionHookPath = path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/session-start.mjs');
   const sessionHook = spawnSync(process.execPath, [sessionHookPath], { cwd: root, encoding: 'utf8' });
   assert.equal(sessionHook.status, 0, sessionHook.stderr);
@@ -203,6 +226,29 @@ test('is idempotent when generated inputs are unchanged', async () => {
   assert.equal(second.changes.filter((change) => ['create', 'update', 'conflict'].includes(change.action)).length, 0);
   await generateKit({ root, blueprint: blueprint(), write: true });
   assert.equal(await readFile(path.join(root, '.projectAgents/generation-state.json'), 'utf8'), stateBefore);
+});
+
+test('removes an unmodified stale managed skill during a naming migration', async () => {
+  const root = await temporaryProject();
+  await generateKit({ root, blueprint: blueprint(), write: true });
+  const relativePath = '.projectAgents/plugins/evidence-workspace-codex-plugin/skills/project-help/SKILL.md';
+  const staleContent = 'legacy project-help skill\n';
+  const stalePath = path.join(root, relativePath);
+  await mkdir(path.dirname(stalePath), { recursive: true });
+  await writeFile(stalePath, staleContent, 'utf8');
+  const statePath = path.join(root, '.projectAgents/generation-state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.files.push({
+    path: relativePath,
+    ownership: 'managed',
+    sha256: createHash('sha256').update(staleContent).digest('hex'),
+  });
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+
+  const plan = await generateKit({ root, blueprint: blueprint() });
+  assert.ok(plan.changes.some((change) => change.relativePath === relativePath && change.action === 'delete'));
+  await generateKit({ root, blueprint: blueprint(), write: true });
+  await assert.rejects(readFile(stalePath, 'utf8'), /ENOENT/);
 });
 
 test('preserves project-owned seeded knowledge', async () => {
@@ -262,4 +308,40 @@ test('inspects software manifests and documentation candidates read-only', async
   assert.deepEqual(inspection.detected, ['node']);
   assert.equal(inspection.packageScripts.test, 'node --test');
   assert.ok(inspection.documentationCandidates.includes('README.md'));
+});
+
+test('maps documentation structure and issues without assigning authority or copying bodies', async () => {
+  const root = await temporaryProject();
+  await mkdir(path.join(root, 'docs'), { recursive: true });
+  await writeFile(
+    path.join(root, 'README.md'),
+    '# Project overview\n\nStart here. SHOULD-NOT-BE-COPIED.\n\n[Architecture](docs/architecture.md)\n[Missing](docs/missing.md)\n[External file](/outside/docs.md)\n',
+    'utf8',
+  );
+  await writeFile(path.join(root, 'docs/architecture.md'), '# Architecture\n\n[[decision]]\n', 'utf8');
+  await writeFile(path.join(root, 'docs/decision.md'), '# Decision\n', 'utf8');
+  await writeFile(path.join(root, 'docs/copy-a.md'), '# Duplicate\n', 'utf8');
+  await writeFile(path.join(root, 'docs/copy-b.md'), '# Duplicate\n', 'utf8');
+  await writeFile(path.join(root, 'docs/manual.pdf'), '%PDF-1.4\n', 'utf8');
+
+  const map = await inspectDocumentation(root);
+  assert.equal(map.summary.documentationCandidates, 6);
+  assert.equal(map.summary.structureAnalysed, 5);
+  assert.equal(map.summary.metadataOnly, 1);
+  assert.equal(map.documents.every((document) => document.authority === 'unknown'), true);
+  assert.equal(map.documents.every((document) => document.status === 'observed'), true);
+  const readme = map.documents.find((document) => document.path === 'README.md');
+  assert.equal(readme.title, 'Project overview');
+  assert.equal(readme.links.find((link) => link.target === 'docs/architecture.md').status, 'resolved');
+  assert.equal(readme.links.find((link) => link.target === '/outside/docs.md').status, 'external-file');
+  assert.ok(map.issues.some((issue) => issue.type === 'broken-local-link' && issue.target === 'docs/missing.md'));
+  assert.ok(map.duplicateGroups.some((group) =>
+    group.paths.includes('docs/copy-a.md') && group.paths.includes('docs/copy-b.md')));
+  assert.equal(map.routes.find((route) => route.id === 'entrypoints').documents[0].path, 'README.md');
+  assert.equal(map.suggestedReadingOrder[0], 'README.md');
+  assert.doesNotMatch(JSON.stringify(map), /SHOULD-NOT-BE-COPIED/);
+  const limited = await inspectDocumentation(root, { maxDocuments: 2 });
+  assert.equal(limited.summary.truncated, true);
+  assert.ok(limited.issues.some((issue) => issue.type === 'candidate-limit-reached'));
+  await assert.rejects(inspectDocumentation(root, { maxDocuments: 0 }), /between 1 and 1000/);
 });

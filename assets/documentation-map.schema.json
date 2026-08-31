@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-agent-factory.local/schemas/documentation-map.schema.json",
+  "title": "Read-only project documentation map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "root",
+    "summary",
+    "documents",
+    "routes",
+    "suggestedReadingOrder",
+    "duplicateGroups",
+    "possibleOrphans",
+    "issues",
+    "note"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "root": { "type": "string", "minLength": 1 },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filesDiscovered",
+        "documentationCandidates",
+        "documentsAnalysed",
+        "structureAnalysed",
+        "metadataOnly",
+        "totalBytes",
+        "truncated"
+      ],
+      "properties": {
+        "filesDiscovered": { "type": "integer", "minimum": 0 },
+        "documentationCandidates": { "type": "integer", "minimum": 0 },
+        "documentsAnalysed": { "type": "integer", "minimum": 0 },
+        "structureAnalysed": { "type": "integer", "minimum": 0 },
+        "metadataOnly": { "type": "integer", "minimum": 0 },
+        "totalBytes": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/document" }
+    },
+    "routes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/route" }
+    },
+    "suggestedReadingOrder": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "duplicateGroups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/duplicateGroup" }
+    },
+    "possibleOrphans": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": { "type": { "type": "string", "minLength": 1 } },
+        "additionalProperties": true
+      }
+    },
+    "note": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "heading": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "text", "line"],
+      "properties": {
+        "level": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "text": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target", "line", "status"],
+      "properties": {
+        "kind": { "enum": ["markdown", "wiki"] },
+        "target": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["anchor", "external", "external-file", "invalid", "missing", "outside-root", "resolved"] },
+        "resolvedPath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "format",
+        "sizeBytes",
+        "modifiedAt",
+        "sha256",
+        "analysis",
+        "authority",
+        "status",
+        "title",
+        "headings",
+        "links"
+      ],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "format": { "enum": ["markdown", "pdf", "docx", "html", "asciidoc", "rst", "org", "text"] },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "modifiedAt": { "type": "string", "format": "date-time" },
+        "sha256": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            { "type": "null" }
+          ]
+        },
+        "analysis": { "enum": ["structure", "metadata-only"] },
+        "authority": { "const": "unknown" },
+        "status": { "const": "observed" },
+        "title": { "type": "string" },
+        "headings": { "type": "array", "items": { "$ref": "#/$defs/heading" } },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/link" } }
+      }
+    },
+    "routeDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "score", "reasons"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "score": { "type": "integer", "minimum": 1 },
+        "reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "documents"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "documents": { "type": "array", "items": { "$ref": "#/$defs/routeDocument" } }
+      }
+    },
+    "duplicateGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "paths"],
+      "properties": {
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "paths": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

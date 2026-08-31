@@ -159,6 +159,12 @@ project-agents-init
 Инициализируй Project Agent Factory для этого проекта.
 ```
 
+Если документация распределена по нескольким каталогам, содержит много файлов или не имеет
+очевидной точки входа, перед инициализацией вызовите `project-docs-prepare` (в Claude Code —
+`/project-agent-factory:project-docs-prepare`). Навык построит read-only карту структуры, ссылок,
+точных дубликатов, возможных orphan-документов и маршрутов чтения. Он не назначает документам
+canonical authority и не изменяет файлы без отдельного preview и подтверждения.
+
 ## 4. Проверьте и утвердите blueprint проекта
 
 Сначала навык инициализации работает только в режиме чтения. Он изучает лишь те материалы, которые
@@ -199,7 +205,9 @@ node .projectAgents/scripts/claude-plugin-init.mjs
 
 1. Изучите lifecycle hooks проекта и доверяйте им, только если их содержимое приемлемо.
 2. Откройте новый чат Codex или новый сеанс Claude Code в целевом проекте.
-3. Выполните `project-help` и `project-status` в качестве первоначальной smoke-проверки.
+3. Выполните `<project-slug>-help` и `<project-slug>-status` в качестве первоначальной smoke-проверки.
+   Например, для проекта со slug `tflex-macros` это `tflex-macros-help` и
+   `tflex-macros-status`.
 
 ## Решение проблем
 

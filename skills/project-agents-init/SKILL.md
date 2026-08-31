@@ -34,16 +34,27 @@ documentation, product work, operations, or a mixed project.
    node "<factory-root>/scripts/project-agents.mjs" inspect --root <project-root>
    ```
 
-4. Read existing `AGENTS.md`, README, obvious documentation indexes, manifests, and only the files
+4. When discovery finds a non-trivial documentation corpus (for example, more than 20 candidates,
+   multiple documentation roots or formats, no obvious entrypoint, or competing instruction
+   files), run the same read-only preflight used by `project-docs-prepare`:
+
+   ```bash
+   node "<factory-root>/scripts/project-agents.mjs" inspect-docs --root <project-root>
+   ```
+
+   Use its suggested reading order and routes only as discovery hints. Do not infer canonical
+   authority from filenames, scores, links, hashes, or modification times. For a small, clear
+   corpus, skip this extra scan and read the obvious entrypoints directly.
+5. Read existing `AGENTS.md`, `CLAUDE.md`, README, obvious documentation indexes, manifests, and only the files
    needed to understand the project. Do not recursively ingest all content.
-5. Ask the user for missing essentials in small batches:
+6. Ask the user for missing essentials in small batches:
    - project purpose, domain, users, and expected deliverables;
    - project kind and working/communication language;
    - source-of-truth documents and their authority;
    - quality/acceptance criteria and approval boundaries;
    - confidentiality, citation, delegation, and mutation policy;
    - repeatable commands only when the project actually has executable checks.
-6. Explicitly invite the user to upload documentation or provide paths. If there is no
+7. Explicitly invite the user to upload documentation or provide paths. If there is no
    documentation, continue from user-confirmed answers and observed project structure.
 
 ## Phase 2: evidence analysis
@@ -105,5 +116,5 @@ then run it without `--check`. Preserve all warnings and errors. Never treat app
 approval for Claude Code or the reverse.
 
 After successful installation, ask the user to review/trust lifecycle hooks as required and open a
-new platform session in the project. In that session, run `project-help` and `project-status` as the
-smoke test.
+new platform session in the project. In that session, run the generated project-slug-prefixed help
+and status skills shown in `.projectAgents/AGENTS.md` as the smoke test.

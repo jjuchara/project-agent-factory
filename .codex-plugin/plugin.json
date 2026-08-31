@@ -1,6 +1,6 @@
 {
   "name": "project-agent-factory",
-  "version": "0.1.0+codex.20260813093949",
+  "version": "0.1.0+codex.20260831155307",
   "description": "Creates autonomous Codex and Claude Code project plugins from an approved project profile and evidence set.",
   "author": {
     "name": "Project Agent Factory contributors"
@@ -28,6 +28,7 @@
     ],
     "defaultPrompt": [
       "Initialize project agents for this project.",
+      "Map this project's documentation before initialization.",
       "Update this project's agent kit safely.",
       "Explain the project agent factory workflow."
     ]
