@@ -74,6 +74,18 @@
         "agentReasoningEffort": { "enum": ["low", "medium", "high", "xhigh"] }
       },
       "additionalProperties": false
+    },
+    "claude": {
+      "type": "object",
+      "properties": {
+        "agentModel": {
+          "type": "string",
+          "pattern": "^(sonnet|opus|haiku|fable|inherit|claude-[a-z0-9.-]+)$"
+        },
+        "agentEffort": { "enum": ["low", "medium", "high", "xhigh", "max"] },
+        "agentMaxTurns": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "project-agent-factory",
+  "displayName": "Project Agent Factory",
+  "version": "0.1.0",
+  "description": "Creates autonomous Codex and Claude Code project plugins from an approved project profile and evidence set.",
+  "author": {
+    "name": "Project Agent Factory contributors"
+  },
+  "repository": "https://github.com/jjuchara/project-agent-factory",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "project-context",
+    "workflow",
+    "generator",
+    "codex",
+    "claude-code"
+  ]
+}

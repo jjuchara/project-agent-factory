@@ -31,5 +31,9 @@
     }
   ],
   "commands": {},
-  "openQuestions": []
+  "openQuestions": [],
+  "claude": {
+    "agentModel": "inherit",
+    "agentEffort": "medium"
+  }
 }

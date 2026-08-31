@@ -19,5 +19,6 @@ description: Use when updating, reconfiguring, or migrating an existing .project
 6. Seeded context, docs, and memory are project-owned and must be preserved. Never replace them with
    newer templates. Update them only as explicit project edits with provenance.
 7. Do not use `--force-managed` unless the user has seen and approved every overwritten path.
-8. Validate the kit after generation. Reinstall the project plugin only if generated plugin content
-   changed and the user separately authorizes the Codex configuration update.
+8. Validate the kit after generation. Reinstall a platform plugin only if its generated content
+   changed and the user separately authorizes that platform's configuration update. Codex approval
+   never authorizes Claude Code changes or the reverse.

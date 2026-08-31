@@ -1,0 +1,18 @@
+{
+  "name": "project-agent-factory",
+  "owner": {
+    "name": "Project Agent Factory contributors"
+  },
+  "description": "Project-agnostic factory for autonomous Codex and Claude Code project plugins.",
+  "plugins": [
+    {
+      "name": "project-agent-factory",
+      "source": ".",
+      "description": "Creates autonomous Codex and Claude Code project plugins from approved project evidence.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Project Agent Factory contributors"
+      }
+    }
+  ]
+}

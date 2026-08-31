@@ -9,8 +9,10 @@
 ## Approval boundaries
 
 Discovery and dry-run are read-only. Project-kit generation, `AGENTS.md` merge, forced replacement,
-Codex marketplace registration, plugin installation, hook trust, and MCP configuration are separate
-actions with explicit approval.
+Codex marketplace registration, Claude Code marketplace registration, each platform's plugin
+installation, hook review/trust, and MCP configuration are separate actions with explicit approval.
+Generated Claude plugins install at local project scope so a project-owned plugin is not silently
+enabled for unrelated workspaces.
 
 ## Data handling
 

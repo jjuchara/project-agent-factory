@@ -1,7 +1,7 @@
 {
   "name": "project-agent-factory",
-  "version": "0.1.0+codex.20260728185437",
-  "description": "Creates autonomous Codex project plugins from an approved project profile and evidence set.",
+  "version": "0.1.0+codex.20260813093949",
+  "description": "Creates autonomous Codex and Claude Code project plugins from an approved project profile and evidence set.",
   "author": {
     "name": "Project Agent Factory contributors"
   },
@@ -11,13 +11,14 @@
     "project-context",
     "workflow",
     "generator",
-    "codex"
+    "codex",
+    "claude-code"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Project Agent Factory",
-    "shortDescription": "Build a tailored Codex plugin for any project.",
-    "longDescription": "Interviews the user, analyses approved project evidence, and generates an autonomous project-owned Codex plugin with context, agents, workflows, memory, hooks, and validation.",
+    "shortDescription": "Build tailored Codex and Claude Code plugins.",
+    "longDescription": "Interviews the user, analyses approved project evidence, and generates autonomous project-owned Codex and Claude Code plugins with shared context, agents, workflows, memory, hooks, and validation.",
     "developerName": "Project Agent Factory contributors",
     "category": "Productivity",
     "capabilities": [

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,6 +45,7 @@ const blueprint = (overrides = {}) => ({
   ],
   commands: overrides.commands ?? {},
   openQuestions: overrides.openQuestions ?? [],
+  ...(overrides.claude ? { claude: overrides.claude } : {}),
 });
 
 const temporaryProject = () => mkdtemp(path.join(os.tmpdir(), 'project-agent-factory-test-'));
@@ -60,6 +62,21 @@ test('rejects unsafe project slugs and unsupported capability packs', () => {
   );
 });
 
+test('validates optional Claude Code agent settings', () => {
+  const configured = validateBlueprint(blueprint({
+    claude: { agentModel: 'sonnet', agentEffort: 'high', agentMaxTurns: 12 },
+  }));
+  assert.equal(configured.claude.agentModel, 'sonnet');
+  assert.throws(
+    () => validateBlueprint(blueprint({ claude: { agentModel: 'gpt-5' } })),
+    /Claude alias or full model ID/,
+  );
+  assert.throws(
+    () => validateBlueprint(blueprint({ claude: { agentMaxTurns: 0 } })),
+    /positive integer/,
+  );
+});
+
 test('builds analytical roles and workflows without coding assumptions', () => {
   const built = buildArtifacts(blueprint());
   assert.ok(built.agents.some((agent) => agent.id === 'project-analyst'));
@@ -67,6 +84,23 @@ test('builds analytical roles and workflows without coding assumptions', () => {
   assert.ok(built.workflows.some((workflow) => workflow.id === 'project-research'));
   assert.ok(!built.agents.some((agent) => agent.id === 'test-engineer'));
   assert.ok(!built.workflows.some((workflow) => workflow.id === 'project-debug'));
+  assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('-claude-plugin/.claude-plugin/plugin.json')));
+  assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('-claude-plugin/agents/project-analyst.md')));
+});
+
+test('maps logical agent permissions to Claude Code tools', () => {
+  const built = buildArtifacts(blueprint({
+    claude: { agentModel: 'haiku', agentEffort: 'medium', agentMaxTurns: 8 },
+  }));
+  const scout = built.artifacts.find((item) => item.relativePath.endsWith('-claude-plugin/agents/project-scout.md'));
+  const reviewer = built.artifacts.find((item) => item.relativePath.endsWith('-claude-plugin/agents/project-reviewer.md'));
+  const analyst = built.artifacts.find((item) => item.relativePath.endsWith('-claude-plugin/agents/project-analyst.md'));
+  assert.match(scout.content, /tools: Read, Grep, Glob\n/);
+  assert.doesNotMatch(scout.content, /Write|Edit|Bash/);
+  assert.match(reviewer.content, /tools: Read, Grep, Glob\n/);
+  assert.doesNotMatch(reviewer.content, /tools: .*Bash/);
+  assert.match(analyst.content, /tools: Read, Grep, Glob, Write, Edit\n/);
+  assert.match(analyst.content, /model: haiku\neffort: medium\nmaxTurns: 8/);
 });
 
 test('adds coding roles and executable verification only for a coding pack', () => {
@@ -110,7 +144,55 @@ test('generates and validates an autonomous project kit', async () => {
     ),
   );
   assert.equal(manifest.name, 'evidence-workspace-codex-plugin');
+  assert.match(manifest.version, /^0\.1\.0\+project\.[a-f0-9]{12}$/);
   assert.match(await readFile(path.join(root, '.codex/agents/project-analyst.toml'), 'utf8'), /sandbox_mode = "workspace-write"/);
+  const claudeManifest = JSON.parse(
+    await readFile(
+      path.join(root, '.projectAgents/plugins/evidence-workspace-claude-plugin/.claude-plugin/plugin.json'),
+      'utf8',
+    ),
+  );
+  assert.equal(claudeManifest.name, 'evidence-workspace-claude-plugin');
+  assert.equal(claudeManifest.version, manifest.version);
+  assert.match(
+    await readFile(
+      path.join(root, '.projectAgents/plugins/evidence-workspace-claude-plugin/hooks/hooks.json'),
+      'utf8',
+    ),
+    /node .*CLAUDE_PLUGIN_ROOT.*session-start\.mjs/,
+  );
+  const codexHooks = await readFile(
+    path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/hooks.json'),
+    'utf8',
+  );
+  assert.match(codexHooks, /node .*PLUGIN_ROOT.*session-start\.mjs/);
+  assert.match(codexHooks, /"Stop"/);
+  assert.match(codexHooks, /project-learn-on-stop\.mjs/);
+  const stopHook = await readFile(
+    path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/project-learn-on-stop.mjs'),
+    'utf8',
+  );
+  assert.match(stopHook, /stop_hook_active/);
+  assert.match(stopHook, /project-learn skill/);
+  const sessionHookPath = path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/session-start.mjs');
+  const sessionHook = spawnSync(process.execPath, [sessionHookPath], { cwd: root, encoding: 'utf8' });
+  assert.equal(sessionHook.status, 0, sessionHook.stderr);
+  assert.match(sessionHook.stdout, /<project-agent-plugin>/);
+  const stopHookPath = path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/project-learn-on-stop.mjs');
+  const stopHookResult = spawnSync(process.execPath, [stopHookPath], { cwd: root, input: '{}', encoding: 'utf8' });
+  assert.equal(stopHookResult.status, 0, stopHookResult.stderr);
+  assert.equal(JSON.parse(stopHookResult.stdout).decision, 'block');
+  const guardedStopHook = spawnSync(process.execPath, [stopHookPath], {
+    cwd: root,
+    input: '{"stop_hook_active":true}',
+    encoding: 'utf8',
+  });
+  assert.equal(guardedStopHook.status, 0, guardedStopHook.stderr);
+  assert.deepEqual(JSON.parse(guardedStopHook.stdout), {});
+  assert.match(
+    await readFile(path.join(root, '.projectAgents/scripts/claude-plugin-init.mjs'), 'utf8'),
+    /plugin', 'install'.*--scope', 'local/,
+  );
 });
 
 test('is idempotent when generated inputs are unchanged', async () => {

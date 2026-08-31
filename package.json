@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "validate": "node scripts/project-agents.mjs validate-factory"
+    "validate": "node scripts/project-agents.mjs validate-factory",
+    "validate:claude": "claude plugin validate . --strict && claude plugin validate .claude-plugin/plugin.json --strict"
   },
   "engines": {
     "node": ">=20"

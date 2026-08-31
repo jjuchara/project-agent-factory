@@ -20,6 +20,8 @@ const KIT_ROOT = '.projectAgents';
 const STATE_PATH = `${KIT_ROOT}/generation-state.json`;
 const MANAGED_BLOCK_START = '<!-- project-agent-factory:start -->';
 const MANAGED_BLOCK_END = '<!-- project-agent-factory:end -->';
+const CLAUDE_MODELS = new Set(['sonnet', 'opus', 'haiku', 'fable', 'inherit']);
+const CLAUDE_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const PROJECT_KINDS = new Set([
   'software',
   'analysis',
@@ -71,6 +73,7 @@ const readJson = async (target, label = target) => {
 
 const stableJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const sha256 = (content) => createHash('sha256').update(content).digest('hex');
+const generatedPluginVersion = (blueprint) => `0.1.0+project.${sha256(stableJson(blueprint)).slice(0, 12)}`;
 const quoteToml = (value) => JSON.stringify(value);
 const quoteYaml = (value) => JSON.stringify(value);
 
@@ -169,6 +172,24 @@ export const validateBlueprint = (blueprint) => {
     for (const [name, command] of Object.entries(blueprint.commands)) {
       validateString(name, 'commands key');
       validateString(command, `commands.${name}`);
+    }
+  }
+  if (blueprint.claude !== undefined) {
+    if (!blueprint.claude || typeof blueprint.claude !== 'object' || Array.isArray(blueprint.claude)) {
+      fail('claude must be an object');
+    }
+    if (blueprint.claude.agentModel !== undefined) {
+      validateString(blueprint.claude.agentModel, 'claude.agentModel');
+      if (!CLAUDE_MODELS.has(blueprint.claude.agentModel) && !/^claude-[a-z0-9.-]+$/.test(blueprint.claude.agentModel)) {
+        fail('claude.agentModel must be a Claude alias or full model ID');
+      }
+    }
+    if (blueprint.claude.agentEffort !== undefined && !CLAUDE_EFFORT_LEVELS.has(blueprint.claude.agentEffort)) {
+      fail('Unsupported claude.agentEffort');
+    }
+    if (blueprint.claude.agentMaxTurns !== undefined
+      && (!Number.isInteger(blueprint.claude.agentMaxTurns) || blueprint.claude.agentMaxTurns < 1)) {
+      fail('claude.agentMaxTurns must be a positive integer');
     }
   }
   return blueprint;
@@ -348,6 +369,35 @@ const renderAgentToml = (agent, blueprint) => {
   return lines.join('\n');
 };
 
+const claudeToolsForAgent = (agent) => {
+  const tools = ['Read', 'Grep', 'Glob'];
+  if (agent.sandboxMode === 'read-only') return tools;
+  if (agent.capabilities.includes('write')) tools.push('Write', 'Edit');
+  if (agent.capabilities.includes('shell')) tools.push('Bash');
+  return tools;
+};
+
+const renderClaudeAgent = (agent, blueprint) => {
+  const lines = [
+    '---',
+    `name: ${agent.id}`,
+    `description: ${quoteYaml(agent.description)}`,
+    `tools: ${claudeToolsForAgent(agent).join(', ')}`,
+  ];
+  if (blueprint.claude?.agentModel) lines.push(`model: ${blueprint.claude.agentModel}`);
+  if (blueprint.claude?.agentEffort) lines.push(`effort: ${blueprint.claude.agentEffort}`);
+  if (blueprint.claude?.agentMaxTurns) lines.push(`maxTurns: ${blueprint.claude.agentMaxTurns}`);
+  lines.push(
+    '---',
+    '',
+    agent.body,
+    '',
+    'Return the result to the parent agent. Do not delegate to another subagent.',
+    '',
+  );
+  return lines.join('\n');
+};
+
 const renderWorkflowSkill = (workflow) => `---
 name: ${workflow.id}
 description: ${quoteYaml(workflow.description)}
@@ -413,8 +463,8 @@ ${MANAGED_BLOCK_END}`;
 
 const renderProjectAgents = (blueprint, agents, workflows) => `# ${blueprint.project.name} project agents
 
-This directory is the project-owned source of truth for Codex instructions, context, evidence,
-workflows, agent roles, and durable memory.
+This directory is the project-owned source of truth for shared agent instructions, context,
+evidence, workflows, logical agent roles, platform adapters, and durable memory.
 
 ## Project contract
 
@@ -514,9 +564,9 @@ const renderEvidenceIndex = (blueprint) => stableJson({
   sources: blueprint.sources,
 });
 
-const renderPluginManifest = (blueprint) => stableJson({
+const renderCodexPluginManifest = (blueprint) => stableJson({
   name: `${blueprint.project.slug}-codex-plugin`,
-  version: '0.1.0',
+  version: generatedPluginVersion(blueprint),
   description: `Project-owned Codex context, agents, workflows, and memory for ${blueprint.project.name}.`,
   author: { name: `${blueprint.project.name} project` },
   keywords: ['project-context', 'agents', 'workflow', blueprint.project.kind],
@@ -532,7 +582,7 @@ const renderPluginManifest = (blueprint) => stableJson({
   },
 });
 
-const renderMarketplace = (blueprint) => stableJson({
+const renderCodexMarketplace = (blueprint) => stableJson({
   name: blueprint.project.slug,
   interface: { displayName: blueprint.project.name },
   plugins: [
@@ -545,7 +595,7 @@ const renderMarketplace = (blueprint) => stableJson({
   ],
 });
 
-const renderHooks = () => stableJson({
+const renderCodexHooks = () => stableJson({
   hooks: {
     SessionStart: [
       {
@@ -553,9 +603,21 @@ const renderHooks = () => stableJson({
         hooks: [
           {
             type: 'command',
-            command: 'bash "${PLUGIN_ROOT}/hooks/session-start.sh"',
+            command: 'node "${PLUGIN_ROOT}/hooks/session-start.mjs"',
             timeout: 15,
             statusMessage: 'Loading project context',
+          },
+        ],
+      },
+    ],
+    Stop: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "${PLUGIN_ROOT}/hooks/project-learn-on-stop.mjs"',
+            timeout: 15,
+            statusMessage: 'Checking project learning',
           },
         ],
       },
@@ -563,23 +625,110 @@ const renderHooks = () => stableJson({
   },
 });
 
-const renderSessionStart = (blueprint) => `#!/usr/bin/env bash
-set -uo pipefail
+const renderClaudePluginManifest = (blueprint) => stableJson({
+  $schema: 'https://json.schemastore.org/claude-code-plugin-manifest.json',
+  name: `${blueprint.project.slug}-claude-plugin`,
+  displayName: `${blueprint.project.name} project agents`,
+  version: generatedPluginVersion(blueprint),
+  description: `Project-owned Claude Code context, agents, workflows, and memory for ${blueprint.project.name}.`,
+  author: { name: `${blueprint.project.name} project` },
+  keywords: ['project-context', 'agents', 'workflow', blueprint.project.kind],
+});
 
-REPO_ROOT="$(git -C "\${PWD}" rev-parse --show-toplevel 2>/dev/null || printf '%s' "\${PWD}")"
-[ -f "\${REPO_ROOT}/.projectAgents/AGENTS.md" ] || exit 0
+const renderClaudeMarketplace = (blueprint) => stableJson({
+  name: blueprint.project.slug,
+  owner: { name: `${blueprint.project.name} project` },
+  description: `Local Claude Code plugins for ${blueprint.project.name}.`,
+  plugins: [
+    {
+      name: `${blueprint.project.slug}-claude-plugin`,
+      source: `./plugins/${blueprint.project.slug}-claude-plugin`,
+      description: `Project-owned Claude Code context, agents, workflows, and memory for ${blueprint.project.name}.`,
+      version: generatedPluginVersion(blueprint),
+      author: { name: `${blueprint.project.name} project` },
+    },
+  ],
+});
 
-printf '%s\n' '<project-agent-plugin>'
-printf '%s\n' '# ${blueprint.project.name}'
-cat "\${REPO_ROOT}/.projectAgents/AGENTS.md"
-if [ -f "\${REPO_ROOT}/.projectAgents/memory/MEMORY.md" ]; then
-  printf '%s\n' '## Project memory index'
-  cat "\${REPO_ROOT}/.projectAgents/memory/MEMORY.md"
-fi
-printf '%s\n' '</project-agent-plugin>'
+const renderClaudeHooks = () => stableJson({
+  hooks: {
+    SessionStart: [
+      {
+        matcher: 'startup|resume|clear|compact',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.mjs"',
+            timeout: 15,
+          },
+        ],
+      },
+    ],
+  },
+});
+
+const renderSessionStart = (blueprint) => `#!/usr/bin/env node
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
+const findProjectRoot = (start) => {
+  let current = path.resolve(start);
+  while (path.dirname(current) !== current) {
+    if (existsSync(path.join(current, '.projectAgents', 'AGENTS.md'))) return current;
+    current = path.dirname(current);
+  }
+  return existsSync(path.join(current, '.projectAgents', 'AGENTS.md')) ? current : null;
+};
+
+const projectRoot = findProjectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+if (!projectRoot) process.exit(0);
+
+const projectAgents = path.join(projectRoot, '.projectAgents', 'AGENTS.md');
+const memory = path.join(projectRoot, '.projectAgents', 'memory', 'MEMORY.md');
+process.stdout.write('<project-agent-plugin>\\n');
+process.stdout.write('# ${blueprint.project.name}\\n');
+process.stdout.write(readFileSync(projectAgents, 'utf8'));
+if (existsSync(memory)) {
+  process.stdout.write('## Project memory index\\n');
+  process.stdout.write(readFileSync(memory, 'utf8'));
+}
+process.stdout.write('</project-agent-plugin>\\n');
 `;
 
-const renderBootstrap = (blueprint) => {
+const renderProjectLearnOnStop = () => `#!/usr/bin/env node
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
+const input = await new Promise((resolve) => {
+  let body = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => { body += chunk; });
+  process.stdin.on('end', () => resolve(body));
+});
+
+// Предотвращаем повторный Stop после продолжения, чтобы не создать бесконечный цикл.
+if (/"stop_hook_active"\\s*:\\s*true/.test(input)) {
+  process.stdout.write('{}\\n');
+  process.exit(0);
+}
+
+let projectRoot = path.resolve(process.cwd());
+while (path.dirname(projectRoot) !== projectRoot
+  && !existsSync(path.join(projectRoot, '.projectAgents', 'AGENTS.md'))) {
+  projectRoot = path.dirname(projectRoot);
+}
+if (!existsSync(path.join(projectRoot, '.projectAgents', 'AGENTS.md'))) {
+  process.stdout.write('{}\\n');
+  process.exit(0);
+}
+
+process.stdout.write(JSON.stringify({
+  decision: 'block',
+  reason: 'Before finishing, invoke the project-learn skill. Audit this session for durable, confirmed project knowledge; search for duplicates; show proposed writes before recording them; and update the canonical project location only when justified. If there is no new durable knowledge, state that explicitly and finish without writing.',
+}) + '\\n');
+`;
+
+const renderCodexBootstrap = (blueprint) => {
   const marketplaceName = blueprint.project.slug;
   const pluginName = `${blueprint.project.slug}-codex-plugin`;
   return `#!/usr/bin/env node
@@ -622,6 +771,50 @@ console.log(checkOnly ? \`Ready to install \${PLUGIN_ID}\` : \`Installed \${PLUG
 `;
 };
 
+const renderClaudeBootstrap = (blueprint) => {
+  const marketplaceName = blueprint.project.slug;
+  const pluginName = `${blueprint.project.slug}-claude-plugin`;
+  return `#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { existsSync, realpathSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(SCRIPT_DIR, '../..');
+const MARKETPLACE_ROOT = path.join(REPO_ROOT, '.projectAgents');
+const MARKETPLACE_NAME = ${JSON.stringify(marketplaceName)};
+const PLUGIN_NAME = ${JSON.stringify(pluginName)};
+const PLUGIN_ID = ${JSON.stringify(`${pluginName}@${marketplaceName}`)};
+const PLUGIN_ROOT = path.join(MARKETPLACE_ROOT, 'plugins', PLUGIN_NAME);
+const checkOnly = process.argv.includes('--check');
+
+const run = (args, capture = false) => {
+  const result = spawnSync('claude', args, { encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit' });
+  if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || 'Claude command failed');
+  return result.stdout?.trim() || '';
+};
+
+const normalize = (value) => path.normalize(existsSync(value) ? realpathSync.native(value) : path.resolve(value));
+run(['plugin', 'validate', PLUGIN_ROOT, '--strict']);
+run(['plugin', 'validate', MARKETPLACE_ROOT, '--strict']);
+const marketplaces = JSON.parse(run(['plugin', 'marketplace', 'list', '--json'], true));
+const existing = marketplaces.find((entry) => entry.name === MARKETPLACE_NAME);
+const existingRoot = existing?.path;
+if (existing && (!existingRoot || normalize(existingRoot) !== normalize(MARKETPLACE_ROOT))) {
+  throw new Error(\`Marketplace '\${MARKETPLACE_NAME}' points to a different source: \${existingRoot || existing.installLocation}\`);
+}
+if (!existing && !checkOnly) run(['plugin', 'marketplace', 'add', MARKETPLACE_ROOT, '--scope', 'local']);
+if (!checkOnly) {
+  run(['plugin', 'install', PLUGIN_ID, '--scope', 'local']);
+  const plugins = JSON.parse(run(['plugin', 'list', '--json'], true));
+  const installed = plugins.some((entry) => entry.id === PLUGIN_ID && entry.scope === 'local' && entry.enabled !== false);
+  if (!installed) throw new Error(\`Claude Code did not confirm that \${PLUGIN_ID} is installed and enabled locally.\`);
+}
+console.log(checkOnly ? \`Ready to install \${PLUGIN_ID} at local scope\` : \`Installed \${PLUGIN_ID}; open a new Claude Code session in this project.\`);
+`;
+};
+
 const renderKitReadme = (blueprint) => `# ${blueprint.project.name} project kit
 
 This kit was generated by Project Agent Factory and is owned by this project.
@@ -634,16 +827,29 @@ From an installed factory checkout:
 node /path/to/project-agent-factory/scripts/project-agents.mjs validate-kit --root "${'${PWD}'}"
 \`\`\`
 
-## Install the project plugin
+## Install project plugins
 
-Installation changes the user's Codex configuration and must be explicitly approved:
+Each installation changes platform configuration and must be explicitly approved separately.
+
+### Codex
 
 \`\`\`bash
 node .projectAgents/scripts/project-plugin-init.mjs --check
 node .projectAgents/scripts/project-plugin-init.mjs
 \`\`\`
 
-Then trust the lifecycle hook and open a new chat in this project.
+Then trust the lifecycle hook and open a new Codex chat in this project.
+
+### Claude Code
+
+Review the generated Claude hook, then install the plugin at local project scope:
+
+\`\`\`bash
+node .projectAgents/scripts/claude-plugin-init.mjs --check
+node .projectAgents/scripts/claude-plugin-init.mjs
+\`\`\`
+
+Open a new Claude Code session in this project after installation.
 
 ## Ownership
 
@@ -663,7 +869,8 @@ export const buildArtifacts = (inputBlueprint) => {
   const blueprint = validateBlueprint(structuredClone(inputBlueprint));
   const agents = agentDefinitions(blueprint);
   const workflows = workflowDefinitions(blueprint);
-  const pluginRoot = `${KIT_ROOT}/plugins/${blueprint.project.slug}-codex-plugin`;
+  const codexPluginRoot = `${KIT_ROOT}/plugins/${blueprint.project.slug}-codex-plugin`;
+  const claudePluginRoot = `${KIT_ROOT}/plugins/${blueprint.project.slug}-claude-plugin`;
   const artifacts = [
     artifact('AGENTS.md', renderRootAgentsBlock(blueprint), 'block'),
     artifact(`${KIT_ROOT}/AGENTS.md`, renderProjectAgents(blueprint, agents, workflows)),
@@ -690,22 +897,33 @@ export const buildArtifacts = (inputBlueprint) => {
       schemaVersion: 1,
       workflows: workflows.map(({ id, description }) => ({ id, description, definition: `definitions/${id}.md` })),
     })),
-    artifact(`${KIT_ROOT}/.agents/plugins/marketplace.json`, renderMarketplace(blueprint)),
-    artifact(`${pluginRoot}/.codex-plugin/plugin.json`, renderPluginManifest(blueprint)),
-    artifact(`${pluginRoot}/hooks/hooks.json`, renderHooks()),
-    artifact(`${pluginRoot}/hooks/session-start.sh`, renderSessionStart(blueprint), 'managed', true),
-    artifact(`${pluginRoot}/skills/using-project/SKILL.md`, renderUsingProjectSkill(blueprint)),
-    artifact(`${pluginRoot}/skills/project-memory/SKILL.md`, renderMemorySkill()),
-    artifact(`${pluginRoot}/skills/self-learning/SKILL.md`, renderSelfLearningSkill()),
-    artifact(`${KIT_ROOT}/scripts/project-plugin-init.mjs`, renderBootstrap(blueprint), 'managed', true),
+    artifact(`${KIT_ROOT}/.agents/plugins/marketplace.json`, renderCodexMarketplace(blueprint)),
+    artifact(`${KIT_ROOT}/.claude-plugin/marketplace.json`, renderClaudeMarketplace(blueprint)),
+    artifact(`${codexPluginRoot}/.codex-plugin/plugin.json`, renderCodexPluginManifest(blueprint)),
+    artifact(`${codexPluginRoot}/hooks/hooks.json`, renderCodexHooks()),
+    artifact(`${codexPluginRoot}/hooks/session-start.mjs`, renderSessionStart(blueprint), 'managed', true),
+    artifact(`${codexPluginRoot}/hooks/project-learn-on-stop.mjs`, renderProjectLearnOnStop(), 'managed', true),
+    artifact(`${codexPluginRoot}/skills/using-project/SKILL.md`, renderUsingProjectSkill(blueprint)),
+    artifact(`${codexPluginRoot}/skills/project-memory/SKILL.md`, renderMemorySkill()),
+    artifact(`${codexPluginRoot}/skills/self-learning/SKILL.md`, renderSelfLearningSkill()),
+    artifact(`${claudePluginRoot}/.claude-plugin/plugin.json`, renderClaudePluginManifest(blueprint)),
+    artifact(`${claudePluginRoot}/hooks/hooks.json`, renderClaudeHooks()),
+    artifact(`${claudePluginRoot}/hooks/session-start.mjs`, renderSessionStart(blueprint), 'managed', true),
+    artifact(`${claudePluginRoot}/skills/using-project/SKILL.md`, renderUsingProjectSkill(blueprint)),
+    artifact(`${claudePluginRoot}/skills/project-memory/SKILL.md`, renderMemorySkill()),
+    artifact(`${claudePluginRoot}/skills/self-learning/SKILL.md`, renderSelfLearningSkill()),
+    artifact(`${KIT_ROOT}/scripts/project-plugin-init.mjs`, renderCodexBootstrap(blueprint), 'managed', true),
+    artifact(`${KIT_ROOT}/scripts/claude-plugin-init.mjs`, renderClaudeBootstrap(blueprint), 'managed', true),
   ];
   for (const agent of agents) {
     artifacts.push(artifact(`${KIT_ROOT}/agents/definitions/${agent.id}.md`, agent.body));
     artifacts.push(artifact(`.codex/agents/${agent.id}.toml`, renderAgentToml(agent, blueprint)));
+    artifacts.push(artifact(`${claudePluginRoot}/agents/${agent.id}.md`, renderClaudeAgent(agent, blueprint)));
   }
   for (const workflow of workflows) {
     artifacts.push(artifact(`${KIT_ROOT}/workflows/definitions/${workflow.id}.md`, workflow.body));
-    artifacts.push(artifact(`${pluginRoot}/skills/${workflow.id}/SKILL.md`, renderWorkflowSkill(workflow)));
+    artifacts.push(artifact(`${codexPluginRoot}/skills/${workflow.id}/SKILL.md`, renderWorkflowSkill(workflow)));
+    artifacts.push(artifact(`${claudePluginRoot}/skills/${workflow.id}/SKILL.md`, renderWorkflowSkill(workflow)));
   }
   return { blueprint, agents, workflows, artifacts };
 };
@@ -906,8 +1124,14 @@ const validateFactory = async () => {
   ]) {
     await readJson(path.join(FACTORY_ROOT, 'assets', schemaName), schemaName);
   }
-  const manifest = await readJson(path.join(FACTORY_ROOT, '.codex-plugin/plugin.json'), 'plugin manifest');
-  if (manifest.name !== 'project-agent-factory') fail('Unexpected plugin name');
+  const codexManifest = await readJson(path.join(FACTORY_ROOT, '.codex-plugin/plugin.json'), 'Codex plugin manifest');
+  if (codexManifest.name !== 'project-agent-factory') fail('Unexpected Codex plugin name');
+  const claudeManifest = await readJson(path.join(FACTORY_ROOT, '.claude-plugin/plugin.json'), 'Claude plugin manifest');
+  if (claudeManifest.name !== 'project-agent-factory') fail('Unexpected Claude plugin name');
+  const claudeMarketplace = await readJson(path.join(FACTORY_ROOT, '.claude-plugin/marketplace.json'), 'Claude marketplace');
+  if (!claudeMarketplace.plugins?.some((plugin) => plugin.name === 'project-agent-factory')) {
+    fail('Claude marketplace does not expose project-agent-factory');
+  }
   const required = [
     'skills/project-agents-init/SKILL.md',
     'skills/project-agents-update/SKILL.md',
@@ -916,7 +1140,11 @@ const validateFactory = async () => {
   for (const relative of required) {
     if (!(await exists(path.join(FACTORY_ROOT, relative)))) fail(`Missing ${relative}`);
   }
-  return { valid: true, manifest: manifest.name, schema: path.relative(FACTORY_ROOT, BLUEPRINT_SCHEMA) };
+  return {
+    valid: true,
+    manifests: { codex: codexManifest.name, claude: claudeManifest.name },
+    schema: path.relative(FACTORY_ROOT, BLUEPRINT_SCHEMA),
+  };
 };
 
 const parseArgs = (argv) => {

@@ -1,8 +1,8 @@
 # Project Agent Factory
 
-Project Agent Factory is a project-agnostic Codex meta-plugin. It interviews a user, inspects a
-repository or document workspace, analyses user-approved evidence, and generates an autonomous
-project plugin owned by that project.
+Project Agent Factory is a project-agnostic meta-plugin for Codex and Claude Code. It interviews a
+user, inspects a repository or document workspace, analyses user-approved evidence, and generates
+autonomous platform plugins owned by that project.
 
 It is not limited to software. Generated kits can support analysts, researchers, document-heavy
 teams, legal work, audits, product work, operations, or mixed projects.
@@ -16,7 +16,7 @@ project-agent-factory            generated project kit
   interview and inspection        .projectAgents/context
   evidence/profile blueprint      .projectAgents/docs and memory
   schemas and safety checks        project-specific agents and workflows
-  deterministic generator         autonomous Codex plugin and bootstrap
+  deterministic generator         autonomous Codex and Claude Code adapters
 ```
 
 The generated kit has no runtime dependency on this factory. Running the factory again is an
@@ -24,9 +24,13 @@ explicit migration/update operation.
 
 ## Usage
 
-Install the plugin from the personal marketplace, open the target project in Codex, and invoke
+For a first-time local installation from a downloaded GitHub checkout, follow the Russian guide
+[Установка Project Agent Factory из GitHub](docs/installation.md).
+
+Install the factory in Codex or Claude Code, open the target project, and invoke
 `project-agents-init`. The skill runs a read-only discovery phase, asks for project documentation,
-shows a sourced project card and blueprint, and waits for approval before writing anything.
+shows a sourced project card and blueprint, and waits for approval before writing anything. One
+approved blueprint produces shared project knowledge plus separate Codex and Claude Code plugins.
 
 The skill resolves its CLI from the installed skill locator; it does not depend on the target
 project's working directory or on a globally exported `PLUGIN_ROOT` variable.
@@ -51,11 +55,13 @@ Canonical source repository: <https://github.com/jjuchara/project-agent-factory>
 ```bash
 npm test
 npm run validate
+npm run validate:claude
 python3 /path/to/plugin-creator/scripts/validate_plugin.py .
 ```
 
-The first release supports Codex only. The blueprint and catalogs remain vendor-neutral so future
-adapters do not require changing the project model.
+The blueprint and logical catalogs remain vendor-neutral. Optional `codex` and `claude` sections
+configure only their respective agent adapters. Plugin installation is never part of generation:
+Codex and Claude Code bootstraps are separate approval boundaries.
 
 ## Global PARA project bootstrap
 

@@ -5,9 +5,9 @@ description: Use when the user asks to initialize project agents, create a tailo
 
 # Initialize project agents
 
-Create a project-owned Codex plugin through a conversational, evidence-led workflow. The target may
-be a software repository, an analysis workspace, research, legal or audit work, documentation,
-product work, operations, or a mixed project.
+Create project-owned Codex and Claude Code plugins through a conversational, evidence-led workflow.
+The target may be a software repository, an analysis workspace, research, legal or audit work,
+documentation, product work, operations, or a mixed project.
 
 ## Non-negotiable safety
 
@@ -69,7 +69,8 @@ Present a concise preview before any write:
 - project card and unresolved questions;
 - proposed agents, permissions, and delegation graph;
 - proposed workflows and verification behavior;
-- generated paths, existing-file conflicts, and whether `AGENTS.md` needs a managed-block merge;
+- shared and platform-specific generated paths, existing-file conflicts, and whether `AGENTS.md`
+  needs a managed-block merge;
 - explicit statement that no MCP is added unless separately approved.
 
 Ask the user to approve or revise this blueprint. Approval of the blueprint authorizes project-kit
@@ -97,9 +98,12 @@ files only; it does not authorize installation or unrelated mutations.
 
 ## Phase 5: optional installation
 
-Generation does not install the project plugin. Explain that installation registers the project's
-local marketplace and changes the user's Codex configuration. Obtain system approval, run the
-generated bootstrap `--check`, then run it without `--check`. Preserve all warnings and errors.
+Generation does not install either project plugin. Explain that each installation registers the
+project's local marketplace and changes that platform's configuration. Ask which platform the user
+wants, obtain separate system approval for each one, run its generated bootstrap with `--check`,
+then run it without `--check`. Preserve all warnings and errors. Never treat approval for Codex as
+approval for Claude Code or the reverse.
 
-After successful installation, ask the user to trust lifecycle hooks and open a new chat in the
-project. In the new chat, run `project-help` and `project-status` as the smoke test.
+After successful installation, ask the user to review/trust lifecycle hooks as required and open a
+new platform session in the project. In that session, run `project-help` and `project-status` as the
+smoke test.
