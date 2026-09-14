@@ -179,29 +179,34 @@ canonical authority и не изменяет файлы без отдельно�
 настройку MCP, доверие lifecycle hooks, установку плагина, принудительную замену изменённых
 managed-файлов или другие несвязанные записи.
 
-## 5. Создайте и при необходимости установите проектные плагины
+## 5. Создайте и активируйте проектные adapters
 
 После утверждения Factory выполняет dry-run перед записью набора `.projectAgents`. Существующее
 содержимое `AGENTS.md` объединяется с новым только после явного подтверждения, а изменённые
 managed-файлы не перезаписываются без предупреждения.
 
-Генерация создаёт два автономных project plugins, но не устанавливает ни один автоматически. Codex
-и Claude Code являются разными границами записи: разрешение на одну платформу не распространяется
-на другую.
+Генерация создаёт общий `.projectAgents` kit, repository-local Codex adapter и автономный Claude
+Code plugin. Codex adapter размещает команды в `.agents/skills`, определения агентов в
+`.codex/agents`, а lifecycle-конфигурацию в `.codex/hooks.json`. Codex обнаруживает эти файлы только
+при работе внутри данного репозитория, поэтому установка generated Codex plugin и регистрация его
+marketplace больше не нужны.
 
-После просмотра generated hook и отдельного подтверждения для нужной платформы выполните:
+Для Codex просмотрите generated hooks, доверьте их через `/hooks` и откройте новый чат в проекте.
+Для Claude Code после просмотра hook и отдельного подтверждения выполните local-scope bootstrap:
 
 ```bash
-# Codex
-node .projectAgents/scripts/project-plugin-init.mjs --check
-node .projectAgents/scripts/project-plugin-init.mjs
-
 # Claude Code: local project scope
 node .projectAgents/scripts/claude-plugin-init.mjs --check
 node .projectAgents/scripts/claude-plugin-init.mjs
 ```
 
-После успешной установки проектного плагина:
+Bootstrap привязывает команды Claude CLI к корню целевого репозитория, поэтому `--scope local`
+остаётся корректным даже при запуске скрипта по абсолютному пути из другого каталога. Установка в
+local scope не удаляет старую копию того же plugin в `user` или `project` scope: такие записи нужно
+сначала найти через `claude plugin list --json`, затем удалить отдельно с точным `--scope` только
+после подтверждения.
+
+После активации adapter:
 
 1. Изучите lifecycle hooks проекта и доверяйте им, только если их содержимое приемлемо.
 2. Откройте новый чат Codex или новый сеанс Claude Code в целевом проекте.
@@ -209,10 +214,25 @@ node .projectAgents/scripts/claude-plugin-init.mjs
    Например, для проекта со slug `tflex-macros` это `tflex-macros-help` и
    `tflex-macros-status`.
 
+Если старый kit ранее устанавливался в Codex как plugin, его команды останутся глобальными до
+явного удаления из пользовательской конфигурации. После проверки точного ID через
+`codex plugin list --json` и отдельного подтверждения удалите legacy plugin, затем при отсутствии
+других зависимостей — его marketplace:
+
+```bash
+codex plugin remove <project-slug>-codex-plugin@<project-slug>
+codex plugin marketplace remove <project-slug>
+```
+
+Обновление `.projectAgents` не выполняет эти команды автоматически.
+
 ## Решение проблем
 
-- **Плагин отсутствует в списке:** проверьте, что путь в `marketplace.json` ведёт к каталогу,
-  содержащему `.codex-plugin/plugin.json`.
+- **Factory plugin отсутствует в списке Codex:** проверьте, что путь в `marketplace.json` ведёт к
+  каталогу, содержащему `.codex-plugin/plugin.json` Factory.
+- **Команды generated project видны в других проектах:** найдите и удалите legacy user-installed
+  Codex plugin по инструкции выше; repository-local skills из `.agents/skills` сами по себе за
+  пределами проекта не загружаются.
 - **Имя marketplace отличается:** после символа `@` в селекторе плагина укажите точное значение
   поля `name` из `marketplace.json`.
 - **Навык инициализации отсутствует:** убедитесь, что плагин включён, затем перезапустите Codex или

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -93,15 +93,25 @@ test('builds analytical roles and workflows without coding assumptions', () => {
 test('names generated skills after the project plugin while preserving logical workflow ids', () => {
   const built = buildArtifacts(blueprint());
   assert.ok(built.workflows.some((workflow) => workflow.id === 'project-help'));
-  const help = built.artifacts.find((item) => item.relativePath.endsWith('skills/evidence-workspace-help/SKILL.md'));
+  const help = built.artifacts.find(
+    (item) => item.relativePath === '.agents/skills/evidence-workspace-help/SKILL.md',
+  );
   assert.ok(help);
   assert.match(help.content, /^---\nname: evidence-workspace-help\n/m);
-  const entrypoint = built.artifacts.find((item) => item.relativePath.endsWith('skills/evidence-workspace/SKILL.md'));
+  const entrypoint = built.artifacts.find(
+    (item) => item.relativePath === '.agents/skills/evidence-workspace/SKILL.md',
+  );
   assert.ok(entrypoint);
   assert.match(entrypoint.content, /^---\nname: evidence-workspace\n/m);
-  assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('skills/evidence-workspace-memory/SKILL.md')));
-  assert.ok(built.artifacts.some((item) => item.relativePath.endsWith('skills/evidence-workspace-self-learning/SKILL.md')));
-  const stopHook = built.artifacts.find((item) => item.relativePath.endsWith('hooks/project-learn-on-stop.mjs'));
+  assert.ok(built.artifacts.some(
+    (item) => item.relativePath === '.agents/skills/evidence-workspace-memory/SKILL.md',
+  ));
+  assert.ok(built.artifacts.some(
+    (item) => item.relativePath === '.agents/skills/evidence-workspace-self-learning/SKILL.md',
+  ));
+  const stopHook = built.artifacts.find(
+    (item) => item.relativePath === '.projectAgents/hooks/project-learn-on-stop.mjs',
+  );
   assert.match(stopHook.content, /invoke the evidence-workspace-learn skill/);
   const projectAgents = built.artifacts.find((item) => item.relativePath === '.projectAgents/AGENTS.md');
   assert.ok(projectAgents);
@@ -160,14 +170,6 @@ test('generates and validates an autonomous project kit', async () => {
   await generateKit({ root, blueprint: blueprint(), write: true });
   const validation = await validateKit(root);
   assert.equal(validation.valid, true);
-  const manifest = JSON.parse(
-    await readFile(
-      path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/.codex-plugin/plugin.json'),
-      'utf8',
-    ),
-  );
-  assert.equal(manifest.name, 'evidence-workspace-codex-plugin');
-  assert.match(manifest.version, /^0\.1\.0\+project\.[a-f0-9]{12}$/);
   assert.match(await readFile(path.join(root, '.codex/agents/project-analyst.toml'), 'utf8'), /sandbox_mode = "workspace-write"/);
   const claudeManifest = JSON.parse(
     await readFile(
@@ -176,7 +178,7 @@ test('generates and validates an autonomous project kit', async () => {
     ),
   );
   assert.equal(claudeManifest.name, 'evidence-workspace-claude-plugin');
-  assert.equal(claudeManifest.version, manifest.version);
+  assert.match(claudeManifest.version, /^0\.1\.0\+project\.[a-f0-9]{12}$/);
   assert.match(
     await readFile(
       path.join(root, '.projectAgents/plugins/evidence-workspace-claude-plugin/hooks/hooks.json'),
@@ -184,31 +186,31 @@ test('generates and validates an autonomous project kit', async () => {
     ),
     /node .*CLAUDE_PLUGIN_ROOT.*session-start\.mjs/,
   );
-  const codexHooks = await readFile(
-    path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/hooks.json'),
-    'utf8',
-  );
-  assert.match(codexHooks, /node .*PLUGIN_ROOT.*session-start\.mjs/);
-  assert.match(codexHooks, /"Stop"/);
-  assert.match(codexHooks, /project-learn-on-stop\.mjs/);
+  const codexHooks = JSON.parse(await readFile(path.join(root, '.codex/hooks.json'), 'utf8'));
+  const sessionStartCommand = codexHooks.hooks.SessionStart[0].hooks[0].command;
+  const stopCommand = codexHooks.hooks.Stop[0].hooks[0].command;
+  assert.match(sessionStartCommand, /\.projectAgents.*session-start\.mjs/);
+  assert.match(stopCommand, /\.projectAgents.*project-learn-on-stop\.mjs/);
+  assert.doesNotMatch(JSON.stringify(codexHooks), /PLUGIN_ROOT/);
   const stopHook = await readFile(
-    path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/project-learn-on-stop.mjs'),
+    path.join(root, '.projectAgents/hooks/project-learn-on-stop.mjs'),
     'utf8',
   );
   assert.match(stopHook, /stop_hook_active/);
   assert.match(stopHook, /evidence-workspace-learn skill/);
-  const sessionHookPath = path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/session-start.mjs');
-  const sessionHook = spawnSync(process.execPath, [sessionHookPath], { cwd: root, encoding: 'utf8' });
+  const nested = path.join(root, 'nested', 'workspace');
+  await mkdir(nested, { recursive: true });
+  const sessionHook = spawnSync(sessionStartCommand, { cwd: nested, encoding: 'utf8', shell: true });
   assert.equal(sessionHook.status, 0, sessionHook.stderr);
   assert.match(sessionHook.stdout, /<project-agent-plugin>/);
-  const stopHookPath = path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/project-learn-on-stop.mjs');
-  const stopHookResult = spawnSync(process.execPath, [stopHookPath], { cwd: root, input: '{}', encoding: 'utf8' });
+  const stopHookResult = spawnSync(stopCommand, { cwd: nested, input: '{}', encoding: 'utf8', shell: true });
   assert.equal(stopHookResult.status, 0, stopHookResult.stderr);
   assert.equal(JSON.parse(stopHookResult.stdout).decision, 'block');
-  const guardedStopHook = spawnSync(process.execPath, [stopHookPath], {
-    cwd: root,
+  const guardedStopHook = spawnSync(stopCommand, {
+    cwd: nested,
     input: '{"stop_hook_active":true}',
     encoding: 'utf8',
+    shell: true,
   });
   assert.equal(guardedStopHook.status, 0, guardedStopHook.stderr);
   assert.deepEqual(JSON.parse(guardedStopHook.stdout), {});
@@ -216,6 +218,89 @@ test('generates and validates an autonomous project kit', async () => {
     await readFile(path.join(root, '.projectAgents/scripts/claude-plugin-init.mjs'), 'utf8'),
     /plugin', 'install'.*--scope', 'local/,
   );
+  await assert.rejects(
+    readFile(path.join(root, '.projectAgents/scripts/project-plugin-init.mjs'), 'utf8'),
+    /ENOENT/,
+  );
+  await assert.rejects(
+    readFile(path.join(root, '.projectAgents/plugins/evidence-workspace-codex-plugin/.codex-plugin/plugin.json'), 'utf8'),
+    /ENOENT/,
+  );
+});
+
+test('pins Claude local-scope installation to the generated project root', async () => {
+  const root = await temporaryProject();
+  const outside = await temporaryProject();
+  await generateKit({ root, blueprint: blueprint(), write: true });
+
+  const fakeBin = path.join(outside, 'bin');
+  const fakeClaude = path.join(fakeBin, 'claude');
+  const fakeClaudeScript = path.join(fakeBin, 'claude.mjs');
+  const fakeClaudeCmd = path.join(fakeBin, 'claude.cmd');
+  const logPath = path.join(outside, 'claude-calls.jsonl');
+  await mkdir(fakeBin, { recursive: true });
+  await writeFile(fakeClaudeScript, `import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify({ cwd: process.cwd(), args }) + '\\n');
+if (args.join(' ') === 'plugin marketplace list --json') process.stdout.write('[]\\n');
+if (args.join(' ') === 'plugin list --json') process.stdout.write(JSON.stringify([
+  {
+    id: process.env.FAKE_CLAUDE_PLUGIN_ID,
+    scope: 'user',
+    enabled: true,
+  },
+  {
+    id: process.env.FAKE_CLAUDE_PLUGIN_ID,
+    scope: 'local',
+    enabled: true,
+    projectPath: process.cwd(),
+  },
+]) + '\\n');
+`, 'utf8');
+  await writeFile(fakeClaude, `#!/bin/sh\nexec "${process.execPath}" "${fakeClaudeScript}" "$@"\n`, 'utf8');
+  await chmod(fakeClaude, 0o755);
+  await writeFile(fakeClaudeCmd, `@"${process.execPath}" "${fakeClaudeScript}" %*\r\n`, 'utf8');
+
+  const bootstrapPath = path.join(root, '.projectAgents/scripts/claude-plugin-init.mjs');
+  const expectedRoot = await realpath(root);
+  const env = {
+    ...process.env,
+    PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ''}`,
+    FAKE_CLAUDE_LOG: logPath,
+    FAKE_CLAUDE_PLUGIN_ID: 'evidence-workspace-claude-plugin@evidence-workspace',
+  };
+  const checkResult = spawnSync(process.execPath, [bootstrapPath, '--check'], {
+    cwd: outside,
+    encoding: 'utf8',
+    env,
+  });
+  assert.equal(checkResult.status, 0, checkResult.stderr);
+  assert.match(checkResult.stderr, /scope=user/);
+  const checkCalls = (await readFile(logPath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+  assert.ok(checkCalls.every((call) => call.cwd === expectedRoot));
+  assert.ok(checkCalls.every((call) => call.args[1] !== 'install'));
+  assert.ok(checkCalls.every((call) => !(call.args[1] === 'marketplace' && call.args[2] === 'add')));
+
+  await writeFile(logPath, '', 'utf8');
+  const result = spawnSync(process.execPath, [bootstrapPath], {
+    cwd: outside,
+    encoding: 'utf8',
+    env,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /scope=user/);
+
+  const calls = (await readFile(logPath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
+  assert.ok(calls.length >= 5);
+  assert.ok(calls.every((call) => call.cwd === expectedRoot));
+  assert.ok(calls.some((call) => call.args.join(' ') === `plugin marketplace add ${path.join(expectedRoot, '.projectAgents')} --scope local`));
+  assert.ok(calls.some((call) => call.args.join(' ') === 'plugin install evidence-workspace-claude-plugin@evidence-workspace --scope local'));
+  assert.ok(calls.every((call) => {
+    const mutatesMarketplace = call.args[1] === 'marketplace' && call.args[2] === 'add';
+    const installsPlugin = call.args[1] === 'install';
+    if (!mutatesMarketplace && !installsPlugin) return true;
+    return call.args.at(-2) === '--scope' && call.args.at(-1) === 'local';
+  }));
 });
 
 test('is idempotent when generated inputs are unchanged', async () => {
@@ -228,27 +313,41 @@ test('is idempotent when generated inputs are unchanged', async () => {
   assert.equal(await readFile(path.join(root, '.projectAgents/generation-state.json'), 'utf8'), stateBefore);
 });
 
-test('removes an unmodified stale managed skill during a naming migration', async () => {
+test('removes unmodified stale managed Codex plugin artifacts during local adapter migration', async () => {
   const root = await temporaryProject();
   await generateKit({ root, blueprint: blueprint(), write: true });
-  const relativePath = '.projectAgents/plugins/evidence-workspace-codex-plugin/skills/project-help/SKILL.md';
-  const staleContent = 'legacy project-help skill\n';
-  const stalePath = path.join(root, relativePath);
-  await mkdir(path.dirname(stalePath), { recursive: true });
-  await writeFile(stalePath, staleContent, 'utf8');
+  const relativePaths = [
+    '.projectAgents/.agents/plugins/marketplace.json',
+    '.projectAgents/plugins/evidence-workspace-codex-plugin/.codex-plugin/plugin.json',
+    '.projectAgents/plugins/evidence-workspace-codex-plugin/hooks/hooks.json',
+    '.projectAgents/plugins/evidence-workspace-codex-plugin/skills/project-help/SKILL.md',
+    '.projectAgents/scripts/project-plugin-init.mjs',
+  ];
+  const staleContent = 'legacy generated Codex artifact\n';
   const statePath = path.join(root, '.projectAgents/generation-state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
-  state.files.push({
-    path: relativePath,
-    ownership: 'managed',
-    sha256: createHash('sha256').update(staleContent).digest('hex'),
-  });
+  for (const relativePath of relativePaths) {
+    const stalePath = path.join(root, relativePath);
+    await mkdir(path.dirname(stalePath), { recursive: true });
+    await writeFile(stalePath, staleContent, 'utf8');
+    state.files.push({
+      path: relativePath,
+      ownership: 'managed',
+      sha256: createHash('sha256').update(staleContent).digest('hex'),
+    });
+  }
   await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const plan = await generateKit({ root, blueprint: blueprint() });
-  assert.ok(plan.changes.some((change) => change.relativePath === relativePath && change.action === 'delete'));
+  for (const relativePath of relativePaths) {
+    assert.ok(plan.changes.some(
+      (change) => change.relativePath === relativePath && change.action === 'delete',
+    ));
+  }
   await generateKit({ root, blueprint: blueprint(), write: true });
-  await assert.rejects(readFile(stalePath, 'utf8'), /ENOENT/);
+  for (const relativePath of relativePaths) {
+    await assert.rejects(readFile(path.join(root, relativePath), 'utf8'), /ENOENT/);
+  }
 });
 
 test('preserves project-owned seeded knowledge', async () => {
@@ -281,6 +380,31 @@ test('requires explicit approval to merge an existing AGENTS.md', async () => {
   const content = await readFile(path.join(root, 'AGENTS.md'), 'utf8');
   assert.match(content, /# Existing instructions/);
   assert.match(content, /project-agent-factory:start/);
+});
+
+test('preserves existing project-local Codex hooks while adding generated hooks', async () => {
+  const root = await temporaryProject();
+  const hooksPath = path.join(root, '.codex/hooks.json');
+  await mkdir(path.dirname(hooksPath), { recursive: true });
+  await writeFile(hooksPath, `${JSON.stringify({
+    description: 'Existing project hooks.',
+    hooks: {
+      SessionEnd: [{ hooks: [{ type: 'command', command: 'node scripts/session-end.mjs' }] }],
+    },
+  }, null, 2)}\n`, 'utf8');
+
+  await generateKit({ root, blueprint: blueprint(), write: true });
+  const hooks = JSON.parse(await readFile(hooksPath, 'utf8'));
+  assert.equal(hooks.description, 'Existing project hooks.');
+  assert.equal(hooks.hooks.SessionEnd[0].hooks[0].command, 'node scripts/session-end.mjs');
+  assert.match(hooks.hooks.SessionStart[0].hooks[0].command, /session-start\.mjs/);
+  assert.match(hooks.hooks.Stop[0].hooks[0].command, /project-learn-on-stop\.mjs/);
+  assert.equal((await validateKit(root)).valid, true);
+  const second = await generateKit({ root, blueprint: blueprint() });
+  assert.equal(
+    second.changes.find((change) => change.relativePath === '.codex/hooks.json').action,
+    'unchanged',
+  );
 });
 
 test('does not propagate source document bodies into generated instructions', () => {

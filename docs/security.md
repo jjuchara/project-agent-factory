@@ -9,10 +9,13 @@
 ## Approval boundaries
 
 Discovery and dry-run are read-only. Project-kit generation, `AGENTS.md` merge, forced replacement,
-Codex marketplace registration, Claude Code marketplace registration, each platform's plugin
-installation, hook review/trust, and MCP configuration are separate actions with explicit approval.
-Generated Claude plugins install at local project scope so a project-owned plugin is not silently
-enabled for unrelated workspaces.
+Claude Code marketplace registration and plugin installation, hook review/trust, removal of a
+legacy user-installed Codex plugin, and MCP configuration are separate actions with explicit
+approval. Generated Codex skills, agents, and hooks stay in the repository and are discovered only
+from its active config layers. Generated Claude plugins install at local project scope so
+project-owned capabilities are not silently enabled for unrelated workspaces. The generated Claude
+bootstrap pins its subprocess working directory to the target repository root; legacy user/project
+installations are detected and removed only through a separately approved scoped operation.
 
 ## Data handling
 

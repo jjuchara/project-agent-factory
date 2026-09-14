@@ -5,7 +5,8 @@ description: Use when the user asks to initialize project agents, create a tailo
 
 # Initialize project agents
 
-Create project-owned Codex and Claude Code plugins through a conversational, evidence-led workflow.
+Create a project-owned repository-local Codex adapter and local-scope Claude Code plugin through a
+conversational, evidence-led workflow.
 The target may be a software repository, an analysis workspace, research, legal or audit work,
 documentation, product work, operations, or a mixed project.
 
@@ -107,14 +108,19 @@ files only; it does not authorize installation or unrelated mutations.
 6. Report created, updated, preserved, and conflicted files. Delete the temporary blueprint when
    practical without using broad or unresolved paths.
 
-## Phase 5: optional installation
+## Phase 5: activation and optional installation
 
-Generation does not install either project plugin. Explain that each installation registers the
-project's local marketplace and changes that platform's configuration. Ask which platform the user
-wants, obtain separate system approval for each one, run its generated bootstrap with `--check`,
-then run it without `--check`. Preserve all warnings and errors. Never treat approval for Codex as
-approval for Claude Code or the reverse.
+Codex needs no generated plugin installation: it discovers project skills from `.agents/skills`,
+agents from `.codex/agents`, and hooks from `.codex/hooks.json` while working in the repository.
+Ask the user to review/trust the Codex hooks and open a new Codex session in the project.
 
-After successful installation, ask the user to review/trust lifecycle hooks as required and open a
-new platform session in the project. In that session, run the generated project-slug-prefixed help
-and status skills shown in `.projectAgents/AGENTS.md` as the smoke test.
+If the project previously used a generated Codex marketplace plugin, report its exact legacy plugin
+ID. Removing that user-level installation and marketplace changes Codex user configuration and
+requires separate explicit approval; never remove it as part of generation.
+
+Claude Code installation remains optional. Explain that it registers the project's marketplace at
+local scope and changes Claude configuration. Obtain separate system approval, run the generated
+Claude bootstrap with `--check`, then run it without `--check`. Preserve all warnings and errors.
+
+In each newly activated platform session, run the generated project-slug-prefixed help and status
+skills shown in `.projectAgents/AGENTS.md` as the smoke test.

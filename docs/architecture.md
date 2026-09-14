@@ -31,18 +31,34 @@ project-scoped apply operation with an exact preview and explicit approval.
 ## Generated project kit
 
 The generated `.projectAgents` directory contains the project profile, evidence index, context,
-rules, memory, and logical catalogs. Codex and Claude Code adapters render separate manifests,
-agent definitions, skills, hooks, marketplaces, and installation bootstraps from that shared model.
+rules, memory, logical catalogs, shared hook scripts, and the Claude Code plugin. The Codex adapter
+renders repository-local skills under `.agents/skills`, agent definitions under `.codex/agents`, and
+lifecycle configuration in `.codex/hooks.json`. It does not render or install a Codex marketplace
+plugin because Codex plugin installation is user-scoped. The Claude Code adapter retains its
+manifest, local marketplace, plugin skills and agents, and local-scope installation bootstrap.
 The kit is autonomous and versioned with the target project.
 
-Lifecycle hooks are Node.js modules invoked with `node`, rather than shell scripts. This keeps
-generated Codex and Claude Code startup hooks portable across Windows, macOS, and Linux. The Codex
-adapter also generates a guarded `Stop` hook that blocks completion once to require the explicit
-`project-learn` workflow; the workflow itself retains its existing evidence and write approvals.
+The generated Claude bootstrap pins every Claude CLI subprocess to the target repository root. A
+missing marketplace is added with `--scope local`, and the generated plugin is always installed in
+that local scope even when the bootstrap is invoked by absolute path from another directory. An
+older installation of the same plugin at user or project scope is reported and removed only as a
+separately approved migration action.
 
-Generated plugin versions use deterministic SemVer build metadata derived from the approved
-blueprint. A material blueprint change therefore produces a new cache identity for both adapters
-without inventing a release version.
+Lifecycle hooks are Node.js modules invoked with `node`, rather than shell scripts. The Codex hook
+command walks upward from the session working directory to find `.projectAgents`, so it also works
+when Codex starts in a nested project directory. This keeps generated Codex and Claude Code startup
+hooks portable across Windows, macOS, and Linux. The Codex adapter also generates a guarded `Stop`
+hook that blocks completion once to require the explicit `project-learn` workflow; the workflow
+itself retains its existing evidence and write approvals.
+
+The generated Claude plugin version uses deterministic SemVer build metadata derived from the
+approved blueprint. A material blueprint change therefore produces a new Claude cache identity
+without inventing a release version. Codex consumes repository files directly and has no generated
+plugin cache identity.
+
+When `.codex/hooks.json` already exists before generation, the factory preserves its description
+and non-factory hook groups while adding the generated `SessionStart` and `Stop` groups. After the
+file enters generation state, later manual changes are reported as managed-file conflicts.
 
 Claude subagents receive an explicit tool list derived from logical capabilities. Read-only roles
 have only `Read`, `Grep`, and `Glob`; write and shell tools are added only when declared. Nested
