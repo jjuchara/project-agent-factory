@@ -29,7 +29,11 @@ To install or migrate generated capabilities in one specific repository, follow 
 PowerShell, Linux, and macOS, plus a ready-to-use prompt for migrating legacy project kits.
 
 For a first-time local installation from a downloaded GitHub checkout, follow the Russian guide
-[Установка Project Agent Factory из GitHub](docs/installation.md).
+[Установка Project Agent Factory из GitHub](docs/installation.md). Immediately after its
+requirements, the guide includes two copy-paste AI-assisted prompts: one installs the Factory
+globally for the current Codex or Claude Code platform, and the other generates an autonomous
+project kit/plugin from the target project. Both preserve explicit approval boundaries for project
+files, user configuration, hook trust, and local-scope Claude plugin installation.
 
 Install the factory in Codex or Claude Code, open the target project, and invoke
 `project-agents-init`. The skill runs a read-only discovery phase, asks for project documentation,
