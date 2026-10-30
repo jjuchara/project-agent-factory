@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { testingWorkflows, testingArtifacts } from './testing/pack.mjs';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
@@ -44,6 +45,7 @@ const CAPABILITY_PACKS = new Set([
   'design',
   'security',
   'release',
+  'browser-testing',
 ]);
 const DOCUMENTATION_EXTENSIONS = new Set([
   '.adoc',
@@ -373,6 +375,7 @@ const workflowDefinitions = (blueprint) => {
       },
     );
   }
+  if (packs.has('browser-testing')) workflows.push(...testingWorkflows());
   return workflows;
 };
 
@@ -935,6 +938,7 @@ export const buildArtifacts = (inputBlueprint) => {
     artifact(`${claudePluginRoot}/skills/${selfLearningSkill}/SKILL.md`, renderSelfLearningSkill(selfLearningSkill)),
     artifact(`${KIT_ROOT}/scripts/claude-plugin-init.mjs`, renderClaudeBootstrap(blueprint), 'managed', true),
   ];
+  if (effectivePacks(blueprint).has('browser-testing')) artifacts.push(...testingArtifacts());
   for (const agent of agents) {
     artifacts.push(artifact(`${KIT_ROOT}/agents/definitions/${agent.id}.md`, agent.body));
     artifacts.push(artifact(`.codex/agents/${agent.id}.toml`, renderAgentToml(agent, blueprint)));
@@ -1439,6 +1443,9 @@ const validateFactory = async () => {
     'documentation-map.schema.json',
   ]) {
     await readJson(path.join(FACTORY_ROOT, 'assets', schemaName), schemaName);
+  }
+  for (const name of ['testing-profile', 'bdd-registry', 'bdd-coverage', 'bdd-run']) {
+    await readJson(path.join(FACTORY_ROOT, 'assets/browser-testing', `${name}.schema.json`));
   }
   const codexManifest = await readJson(path.join(FACTORY_ROOT, '.codex-plugin/plugin.json'), 'Codex plugin manifest');
   if (codexManifest.name !== 'project-agent-factory') fail('Unexpected Codex plugin name');

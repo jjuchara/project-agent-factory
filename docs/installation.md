@@ -338,3 +338,11 @@ codex plugin marketplace remove <project-slug>
   `node --version`.
 - **В целевом проекте уже есть `AGENTS.md` или `.projectAgents`:** не удаляйте их. Позвольте навыку
   инициализации или обновления показать конфликты и запросить необходимые подтверждения.
+
+## Optional browser-testing setup
+
+Select `browser-testing` in the approved capability packs during init/update, then invoke the
+generated project test-infra skill. Generation only adds portable skills/helpers; dependency and
+browser installation, project MCP configuration, authentication/data fixtures and CI require their
+own reviewed setup operations. Existing Playwright projects are adapted rather than overwritten.
+See [browser testing](browser-testing.md) for commands, supported baseline and validation limits.

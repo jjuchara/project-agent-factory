@@ -1,8 +1,8 @@
 ## Project knowledge
 
-- **The single source of truth is the Project Agent Factory documentation in Obsidian**: [Project Agent Factory](</Users/jjuchara/Documents/MySecondBrain/1. Projects/Project Agent Factory.md>). Open it with [Project Agent Factory](obsidian://open?vault=MySecondBrain&file=1.%20Projects%2FProject%20Agent%20Factory). Product thinking, planning, decisions, design, manual evidence, and roadmap are maintained there in Russian.
+- **The single source of truth is the Project Agent Factory documentation in Obsidian**: [Project Agent Factory](</Users/jjuchara/Documents/MySecondBrain/4. Archives/Projects/Project Agent Factory/00. Project Agent Factory.md>). Open it with [Project Agent Factory](obsidian://open?vault=MySecondBrain&file=4.%20Archives%2FProjects%2FProject%20Agent%20Factory%2F00.%20Project%20Agent%20Factory.md). Product thinking, planning, decisions, design, manual evidence, and roadmap are maintained there in Russian.
 - **This Git repository stores code-adjacent English contracts** required to use, maintain, verify, and release the plugin: README, architecture and security documentation, schemas, tests, LICENSE, and contributor instructions. Do not mirror speculative product work from the second brain here.
-- Read the main Project Agent Factory note and relevant files under `1. Projects/Project Agent Factory/` before planning substantial work.
+- Read the main Project Agent Factory note and relevant files under `4. Archives/Projects/Project Agent Factory/` before planning substantial work.
 - After meaningful code or behavior changes, update the affected Russian Obsidian documents first and refresh affected English repository contracts when the change is user-visible.
 
 ## Current state

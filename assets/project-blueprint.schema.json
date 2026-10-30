@@ -35,7 +35,7 @@
         "artifactTypes": { "type": "array", "items": { "type": "string" } },
         "capabilityPacks": {
           "type": "array",
-          "items": { "enum": ["coding", "research", "documentation", "source-verification", "design", "security", "release"] },
+          "items": { "enum": ["coding", "research", "documentation", "source-verification", "design", "security", "release", "browser-testing"] },
           "uniqueItems": true
         }
       },

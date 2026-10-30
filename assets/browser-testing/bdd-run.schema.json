@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BDD run evidence",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "fingerprint",
+    "startedAt",
+    "scenarios",
+    "untagged"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "run-evidence"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "startedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Execution",
+        "type": "object",
+        "required": [
+          "id",
+          "signature",
+          "title",
+          "project",
+          "status",
+          "instance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^bdd-[a-f0-9]{12}$"
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "project": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "blocked"
+            ]
+          },
+          "instance": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "untagged": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://project-agent-factory.local/schemas/bdd-run.schema.json"
+}

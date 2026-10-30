@@ -32,3 +32,13 @@ description: Use when updating, reconfiguring, or migrating an existing .project
 11. Inspect `claude plugin list --json` for older installations of the same plugin ID at `user` or
     `project` scope. A new local installation does not authorize or remove them. Report their exact
     scope and project path, then obtain separate approval before running an exact scoped uninstall.
+
+## Optional browser-testing capability
+
+Offer `browser-testing` only when browser acceptance automation is requested. Its approved blueprint
+adds autonomous `<slug>-test-infra` and `<slug>-bdd-tests` skills, helpers, schemas and references.
+It does not add Playwright dependencies, project test files, a testing profile, MCP, browser installs
+or CI automatically. Run the generated test-infra workflow in the target project to audit and preview
+those separate changes. Preserve existing testing conventions and source confidentiality. Review
+capability removal separately: test specs, fixtures, profiles and evidence are project-owned and
+must not be removed with managed runtime files. Non-browser projects remain unchanged.

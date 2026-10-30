@@ -72,3 +72,18 @@ project-specific child-agent allowlist.
 - `block`: a marked section inside root `AGENTS.md`; merged only with explicit approval.
 
 This separation prevents template upgrades from erasing project knowledge.
+
+## Optional browser-testing capability
+
+`browser-testing` is opt-in; its stack-specific templates and runtime are isolated under
+`assets/browser-testing` and `scripts/testing`. The logical factory core only selects the capability
+and renders shared workflows/adapters. It does not inspect live applications or install dependencies
+during kit generation. Non-browser kits have no new runtime dependency.
+
+The generated kit contains autonomous helpers, contracts and references under `.projectAgents/testing`.
+The separate test-infra workflow creates project-owned profile/test infrastructure only after a
+concrete preview and approval. Test specs, fixtures and evidence are outside managed factory output.
+Markdown import and approved Gherkin remain separate evidence layers; playwright-bdd compiles
+project-owned features/steps into derivative Playwright specs. Test Agents support exploration and
+diagnosis through specialized MCP, without adopting the upstream healer's skip/fixme policy.
+See [browser testing](browser-testing.md) for ownership, execution and verification boundaries.

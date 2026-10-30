@@ -94,3 +94,14 @@ from any directory: canonical Russian Obsidian notes, a Git development root und
 
 Personal Codex marketplace symlink and installation are conditional and require separate approval;
 ordinary projects do not receive plugin-specific setup.
+
+## Optional browser acceptance testing
+
+Add `browser-testing` to an approved blueprint's capability packs to generate autonomous
+`<slug>-test-infra` and `<slug>-bdd-tests` skills for Codex and Claude Code. They audit/configure
+Playwright infrastructure and turn approved Markdown/Gherkin requirements into playwright-bdd
+steps, reproducible tests and outcome-level coverage. Target-project dependencies, integrations,
+authorization and CI setup remain separate operations. See [the browser testing contract](docs/browser-testing.md).
+
+For development, run `npm ci` before `npm test`; `npm run test:browser` runs the explicit isolated
+Chromium/BDD/Test Agents MCP smoke and requires an installed Chromium browser and local process/network permissions.

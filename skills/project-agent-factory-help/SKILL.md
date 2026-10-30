@@ -23,3 +23,8 @@ Explain these boundaries concisely:
 For a new project, recommend `project-agents-init`. Recommend `project-docs-prepare` first when the
 documentation corpus is scattered or difficult to navigate. For an existing kit, recommend
 `project-agents-update`.
+
+When explaining browser testing, describe the optional `browser-testing` capability, generated
+project-slug-prefixed test-infra/bdd-tests skills, and separate target-project setup and integration
+approvals. The generated kit works without this factory checkout. Do not imply generation installs
+dependencies or proves live browser/CI readiness.

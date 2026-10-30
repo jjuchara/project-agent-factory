@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BDD source registry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "scenarios",
+    "issues",
+    "drafts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Scenario",
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "feature",
+          "title",
+          "review",
+          "conflict",
+          "variants",
+          "expectedInstances"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^bdd-[a-f0-9]{12}$"
+          },
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "feature": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "review": {
+            "const": "needs-review"
+          },
+          "conflict": {
+            "type": "boolean"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "title": "Scenario variant",
+              "type": "object",
+              "required": [
+                "signature",
+                "steps",
+                "expectations",
+                "sources"
+              ],
+              "properties": {
+                "signature": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "steps": {
+                  "type": "array",
+                  "items": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "title": "Step",
+                    "type": "object",
+                    "required": [
+                      "keyword",
+                      "text",
+                      "line"
+                    ],
+                    "properties": {
+                      "keyword": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "table": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "docString": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "expectations": {
+                  "type": "array",
+                  "items": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "title": "Expected outcome",
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "text",
+                      "line"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "title": "Source",
+                    "type": "object",
+                    "required": [
+                      "path",
+                      "line",
+                      "sha256"
+                    ],
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "line": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "expectedInstances": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Diagnostic",
+        "type": "object",
+        "required": [
+          "source",
+          "line",
+          "code"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "drafts": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Draft",
+        "type": "object",
+        "required": [
+          "source",
+          "feature",
+          "text"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "feature": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://project-agent-factory.local/schemas/bdd-registry.schema.json"
+}

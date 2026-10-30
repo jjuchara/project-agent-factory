@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BDD coverage mapping",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "scenarios",
+    "projects"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Scenario mapping",
+        "type": "object",
+        "required": [
+          "id",
+          "approvedSignature",
+          "assertions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^bdd-[a-f0-9]{12}$"
+          },
+          "approvedSignature": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "title": "Assertion location",
+              "type": "object",
+              "required": [
+                "expectationId",
+                "file",
+                "symbol"
+              ],
+              "properties": {
+                "expectationId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "file": {
+                  "type": "string",
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+                },
+                "symbol": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://project-agent-factory.local/schemas/bdd-coverage.schema.json"
+}

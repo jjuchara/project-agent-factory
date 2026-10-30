@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Project browser-testing profile",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runner",
+    "browser",
+    "adapter",
+    "config",
+    "features",
+    "steps",
+    "seed",
+    "baseURLVariable",
+    "authentication",
+    "dataIsolation",
+    "repairAttempts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "runner": {
+      "const": "playwright-bdd"
+    },
+    "browser": {
+      "const": "chromium"
+    },
+    "adapter": {
+      "const": "playwright-test-mcp"
+    },
+    "config": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+    },
+    "features": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+    },
+    "steps": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+    },
+    "seed": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+    },
+    "baseURLVariable": {
+      "type": "string",
+      "pattern": "^[A-Z_][A-Z0-9_]*$"
+    },
+    "authentication": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataIsolation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repairAttempts": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "additionalInputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+"
+      },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://project-agent-factory.local/schemas/testing-profile.schema.json"
+}

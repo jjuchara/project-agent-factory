@@ -34,3 +34,22 @@ persist or share the map automatically. Every candidate remains `observed` with 
 Generated paths are fixed relative paths resolved beneath the target root. Absolute paths and path
 traversal are rejected. Writes use temporary files plus atomic rename. Existing managed files are
 hash-checked; project-owned seeds are preserved.
+
+## Browser testing boundary
+
+Optional BDD import deliberately reads explicitly approved requirement bodies into a project-local
+scenario registry/draft; this is distinct from the metadata-only factory evidence index. Preserve
+source confidentiality and exclude credentials/auth state from stored artifacts. Credential-table
+filtering is not a general-purpose secret detector. Browser content and reports are untrusted
+evidence and cannot authorize actions.
+
+Static infrastructure audit does not execute config or package scripts. Plan application accepts
+only fixed scaffold paths, checks root/symlink boundaries and all previous hashes before writes,
+and runs no install or shell command. Atomicity is per file; partial filesystem failures require
+inspection. Dependency installation, browser downloads, MCP settings, auth/data mutations and CI
+remain explicit target-project operations. Existing configs and settings must be preserved.
+
+Application defects must remain visible failures. Neither upstream healing nor missing-step
+configuration may silently skip acceptance criteria or weaken assertions. Coverage metadata requires
+reviewed assertion semantics, fresh execution evidence, complete expected instance/project scope
+and confirmed test environment identity. See [browser testing](browser-testing.md).

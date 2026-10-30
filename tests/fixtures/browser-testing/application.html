@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Acceptance fixture</title></head>
+<body>
+<section aria-label="Views"><article>Example view</article><button>Remove view</button></section>
+<section aria-label="Records"><article>Example record</article></section>
+<script>
+document.querySelector('button').onclick = () => {
+  document.querySelector('[aria-label="Views"] article').remove();
+  if (new URLSearchParams(location.search).has('bug')) document.querySelector('[aria-label="Records"] article').remove();
+};
+</script>
+</body></html>
