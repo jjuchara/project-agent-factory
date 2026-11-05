@@ -24,7 +24,7 @@ export async function main(argv = process.argv.slice(2)) {
     result = await applyInfrastructure(root, await json(options.plan));
   } else if (command === 'inspect-bdd') {
     if (!options.input.length) throw new Error('Provide at least one --input');
-    const { inspectSources } = await import('./bdd.mjs');
+    const { inspectSources } = await import('./specification-cli.mjs');
     const sources = [];
     for (const file of options.input) sources.push({ path: file, text: await readFile(file, 'utf8') });
     result = inspectSources(sources, options.previous ? await json(options.previous) : null);
@@ -34,7 +34,7 @@ export async function main(argv = process.argv.slice(2)) {
     result = await importResults(root, await json(options.registry), await json(options.input[0]));
   } else if (command === 'check-coverage') {
     if (!options.registry || !options.mapping) throw new Error('Provide --registry and --mapping');
-    const { checkCoverage } = await import('./bdd.mjs');
+    const { checkCoverage } = await import('./specification-cli.mjs');
     const registry = await json(options.registry);
     const mapping = await json(options.mapping);
     const run = options.run ? await json(options.run) : null;

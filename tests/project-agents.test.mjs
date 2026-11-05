@@ -5,11 +5,14 @@ import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/pr
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import Ajv from 'ajv/dist/2020.js';
 import {
   buildArtifacts,
   generateKit,
   inspectDocumentation,
   inspectProject,
+  resolveCapabilityPacks,
+  resolvePackDependencies,
   validateBlueprint,
   validateKit,
 } from '../scripts/project-agents.mjs';
@@ -54,6 +57,34 @@ const temporaryProject = () => mkdtemp(path.join(os.tmpdir(), 'project-agent-fac
 
 test('validates a project-agnostic analytical blueprint', () => {
   assert.equal(validateBlueprint(blueprint()).project.kind, 'research');
+});
+
+test('requires explicit packs and resolves dependencies without duplicates', () => {
+  assert.throws(
+    () => validateBlueprint(blueprint({ project: { capabilityPacks: undefined } })),
+    /explicit project\.capabilityPacks migration/,
+  );
+  const resolved = resolveCapabilityPacks(blueprint({
+    project: { capabilityPacks: ['bdd-specification', 'browser-testing'] },
+  }));
+  assert.deepEqual(resolved.requested, ['bdd-specification', 'browser-testing']);
+  assert.deepEqual(resolved.effective, ['bdd-specification', 'browser-testing']);
+  assert.deepEqual(resolved.implicit, []);
+  assert.throws(
+    () => resolvePackDependencies(['a'], { a: { dependsOn: ['b'] }, b: { dependsOn: ['a'] } }),
+    /dependency cycle/,
+  );
+  assert.equal(validateBlueprint({ ...blueprint(), schemaVersion: 2 }).schemaVersion, 2);
+});
+
+test('blueprint JSON schema requires an explicit capability pack list for legacy and current versions', async () => {
+  const schema = JSON.parse(await readFile(new URL('../assets/project-blueprint.schema.json', import.meta.url), 'utf8'));
+  const validate = new Ajv({ strict: false }).compile(schema);
+  assert.equal(validate(blueprint()), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ ...blueprint(), schemaVersion: 2 }), true, JSON.stringify(validate.errors));
+  const legacyWithoutPacks = blueprint();
+  delete legacyWithoutPacks.project.capabilityPacks;
+  assert.equal(validate(legacyWithoutPacks), false);
 });
 
 test('rejects unsafe project slugs and unsupported capability packs', () => {

@@ -24,7 +24,9 @@ For a new project, recommend `project-agents-init`. Recommend `project-docs-prep
 documentation corpus is scattered or difficult to navigate. For an existing kit, recommend
 `project-agents-update`.
 
-When explaining browser testing, describe the optional `browser-testing` capability, generated
-project-slug-prefixed test-infra/bdd-tests skills, and separate target-project setup and integration
+When explaining BDD, describe the explicit `bdd-specification` capability for analyst repositories
+and the `browser-testing` capability for code repositories. `browser-testing` depends on the
+specification core and generates project-slug-prefixed bdd-spec/test-infra/bdd-tests skills.
+Project kind never authorizes either pack. Target-project setup and integration have separate
 approvals. The generated kit works without this factory checkout. Do not imply generation installs
 dependencies or proves live browser/CI readiness.

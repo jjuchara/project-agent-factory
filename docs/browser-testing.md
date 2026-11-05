@@ -1,14 +1,48 @@
-# Browser acceptance testing
+# BDD specification and browser acceptance testing
 
-`browser-testing` is an optional capability pack for an approved project blueprint. Add it to
-`project.capabilityPacks` alongside the project's existing packs, preview generation, and apply only
-after project-kit approval. It is never selected implicitly from project kind.
+BDD support is selected explicitly in an approved blueprint and is never inferred from project
+kind:
 
-The generated project receives `<slug>-test-infra` and `<slug>-bdd-tests` skills for repository-local
-Codex and the project Claude plugin. Claude exposes skills using its installed plugin namespace;
-Codex uses `$<slug>-bdd-tests` and `$<slug>-test-infra`. No duplicate command implementation is needed.
-All shared instructions, helpers, schemas and references are included under `.projectAgents/testing`.
-The generated runtime does not import or locate the factory checkout.
+- `bdd-specification` is the analyst-repository pack. It generates `<slug>-bdd-spec`, a bundled
+  Node.js CLI, registry/manifest schemas and specification references. It has no Playwright, browser,
+  MCP, auth or code-repository dependency.
+- `browser-testing` is the code-repository pack. It depends on `bdd-specification` and adds
+  `<slug>-test-infra`, `<slug>-bdd-tests`, execution helpers and evidence schemas.
+- an empty explicit pack list generates no BDD capability; the mandatory base workflows remain.
+
+A previous blueprint that explicitly selected `browser-testing` remains compatible and expands to
+all three skills without duplicate core artifacts. A legacy blueprint without `capabilityPacks`
+requires an approved migration rather than kind-based defaults.
+
+Claude exposes skills using its installed plugin namespace; Codex uses repository-local
+`$<slug>-bdd-spec`, `$<slug>-bdd-tests` and `$<slug>-test-infra`. Shared managed runtime is under
+`.projectAgents/testing`; project-owned bundles, features, profiles, fixtures, mappings and evidence
+remain outside generation state and survive capability removal.
+
+## Specification workflow
+
+The generated specification CLI is a committed ESM bundle containing the reviewed Cucumber parser
+and Ajv validator. Target analyst repositories need only Node.js; generation and use do not run npm,
+download dependencies or locate the Factory checkout. Bundled MIT notices are generated alongside
+the runtime.
+
+```bash
+node .projectAgents/testing/specification-cli.mjs inspect-bdd --input requirements.md
+node .projectAgents/testing/specification-cli.mjs inspect-bdd --input requirements.md --previous registry.json
+node .projectAgents/testing/specification-cli.mjs prepare-bundle --metadata metadata.json --registry registry.json --diagnostics diagnostics.json --feature approved.feature --output bdd-bundle --write
+node .projectAgents/testing/specification-cli.mjs validate-bundle --bundle bdd-bundle
+```
+
+Import preserves source hashes/lines, stable BDD IDs, signatures, Rule/Outline identity, duplicates,
+conflicts and visible diagnostics. Definition of Ready requires valid structure, observable outcomes,
+resolved conflicts/details, current signatures, source authority and analyst approval. The workflow
+may normalize and report these conditions but cannot grant approval or change business meaning.
+
+The project-owned bundle contains `manifest.json`, registry, diagnostics and normalized features.
+The manifest records GitLab project/path, full commit SHA, optional merge-request metadata, owner and
+approval, schema/runtime versions, source hashes, BDD IDs/signatures, diagnostics and `specReady`.
+Every artifact hash is verified. Branch/tag/default-branch and merge-request-only references are
+mutable and rejected; fetching or authenticating to GitLab is a separate authorized action.
 
 ## Infrastructure workflow
 
@@ -47,29 +81,17 @@ CI setup follows the target provider and existing pipeline: frozen dependency in
 Chromium/system dependencies, an approved running application and isolated data, generation,
 execution and retained reports/traces. The deterministic helper does not guess a provider.
 
-## BDD workflow
+## Browser execution workflow
 
-Pass Markdown paths, valid localized Gherkin `.feature` paths or requirement text to the generated
-bdd-tests skill. Its modes are analyze, generate, run and diagnose. It can execute sequentially
-without subagents. Original source documents remain unchanged.
+Pass only a validated local specification bundle or a GitLab reference pinned to a full commit SHA
+and exact path to the generated bdd-tests skill. Its modes are verify-handoff, generate, run and
+diagnose. It can execute sequentially without subagents. It does not receive general access to the
+analyst repository.
 
 ```bash
-node .projectAgents/testing/cli.mjs inspect-bdd --input /path/to/requirements.md
-node .projectAgents/testing/cli.mjs inspect-bdd --input /path/to/requirements.md --previous /path/to/registry.json
+node .projectAgents/testing/specification-cli.mjs validate-bundle --bundle /path/to/bundle
+node .projectAgents/testing/specification-cli.mjs validate-gitlab-ref --input gitlab-reference.json
 ```
-
-Inputs are explicit and bounded to 1 MiB each. Rough Markdown supports English structural keywords
-with original-language prose. It tolerates fences, whitespace and missing heading punctuation;
-unsupported details, empty steps and credentials tables remain diagnostics. Valid localized
-`.feature` uses the standard Gherkin parser. The agent must resolve free-form enumerations and
-semantic questions, show exact feature diffs and obtain specification approval before implementation.
-It cannot infer required behavior from the current application.
-
-The registry records scenario identities, expected outcome identities, expected Examples counts,
-source lines/hashes, duplicate variants and conflicts. Stable `@bdd-<12 hex digits>` scenario tags
-preserve identity across renames; signatures invalidate approval/evidence when content changes.
-Title-based matching cannot safely infer arbitrary renames; retain explicit provenance and review
-identity changes. Conflicting sources require an authority decision, never automatic selection.
 
 For an approved feature, export existing steps with the local `bddgen export`, explore through
 Test Agents MCP, reuse domain steps and generate missing step definitions, fixtures and minimal
@@ -93,7 +115,7 @@ string/location checks cannot prove semantics.
 ```bash
 node .projectAgents/testing/cli.mjs import-results --registry registry.json --input test-results/results.json
 node .projectAgents/testing/cli.mjs check-coverage --registry registry.json --mapping mapping.json --run run.json
-node .projectAgents/testing/cli.mjs validate-data --type bdd-registry --input registry.json
+node .projectAgents/testing/specification-cli.mjs validate-data --type bdd-registry --input registry.json
 ```
 
 Persist outputs only in an authorized project location. `import-results` consumes fresh Playwright
@@ -110,7 +132,8 @@ imports and external test-data roots. Review that declaration: static import dis
 complete JavaScript dependency graph. Test fingerprints do not establish backend/build identity,
 authorization, semantic correctness or production readiness.
 
-The schemas are distributed with the kit: testing-profile, bdd-registry, bdd-coverage and bdd-run.
+The schemas are distributed with the kit: specification-manifest, testing-profile, bdd-registry,
+bdd-coverage and bdd-run.
 BDD registries/drafts contain scenario text and are confidential project test artifacts when source
 material is restricted; they are separate from the factory's metadata-only evidence index. No
 source document can authorize code execution, credential access, integration or writes.
@@ -131,10 +154,12 @@ checks against a controlled application, verifies an intentional linked-record d
 fails, checks coverage results, and exercises Test Agents MCP initialize/tools/seed/snapshot.
 It does not install a plugin into user configuration or run full conversational platform sessions.
 
-Fresh evidence on 2026-10-30: 37 unit/regression tests and the macOS Chromium/BDD/MCP smoke passed;
-local user-source import produced 17 scenarios with one source conflict. Full Codex/Claude skill
-sessions, Windows/Linux execution and real provider CI remain unrun. The official Codex plugin
-validator from OpenAI release `rust-v0.150.0` was retrieved and passed before commit; see its
+Fresh evidence on 2026-11-05: 42 unit/regression tests pass, including analyst-only generation,
+standalone bundled CLI execution, dependency expansion, immutable handoff, bundle hashes and safe
+pack removal. The macOS Chromium/BDD/MCP smoke passes and preserves the intentional application
+failure. Full Codex/Claude skill sessions, a live two-repository GitLab handoff, Windows/Linux
+execution and real provider CI remain unrun. The official Codex plugin validator from OpenAI
+release `rust-v0.150.0` was retrieved and passed; see its
 [versioned source](https://github.com/openai/codex/blob/rust-v0.150.0/codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py).
 It was run with its accompanying `identifier_validation.py` from a temporary directory; neither
 script was installed into user configuration. Internal and skill checks remain separate checks.

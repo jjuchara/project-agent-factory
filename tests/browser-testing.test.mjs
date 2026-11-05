@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, writeFile, readFile, mkdir, symlink, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,11 +9,13 @@ import Ajv from 'ajv/dist/2020.js';
 import { inspectSources, checkCoverage, parseGherkin } from '../scripts/testing/bdd.mjs';
 import { auditInfrastructure, planInfrastructure, applyInfrastructure, defaultProfile, within } from '../scripts/testing/infra.mjs';
 import { importResults, verifyEvidence } from '../scripts/testing/results.mjs';
-import { buildArtifacts, generateKit, validateKit } from '../scripts/project-agents.mjs';
+import { prepareSpecificationBundle, validateGitLabReference, validateSpecificationBundle } from '../scripts/testing/spec-cli.mjs';
+import { buildArtifacts, generateKit, resolveCapabilityPacks, validateKit } from '../scripts/project-agents.mjs';
 const temp = () => mkdtemp(path.join(os.tmpdir(), 'paf-browser-test-'));
 const source = (text, name = 'requirements.md') => ({ path: name, text });
 const scenario = (result = 'notification is visible') => `Feature Create item\nBackground User is authenticated\nScenarios 1.1 (Create item)\nGiven the editor is open\nWhen user saves\nThen ${result}\nAnd item is visible\n`;
 const bp = { schemaVersion: 1, project: { name: 'Independent project', slug: 'independent-project', kind: 'software', summary: 'Browser acceptance', workingLanguage: 'Russian', capabilityPacks: ['browser-testing'] }, policies: { communicationLanguage: 'Russian', writeApproval: 'explicit', confidentiality: 'internal', sourceCitation: 'required', delegation: 'disabled' }, qualityCriteria: ['Approved acceptance outcomes pass.'], sources: [] };
+const specificationBp = { ...bp, schemaVersion: 2, project: { ...bp.project, kind: 'analysis', capabilityPacks: ['bdd-specification'] } };
 
 test('deduplicates source variants and preserves conflicts, provenance and independent outcomes', () => {
   const registry = inspectSources([source(scenario()), source(scenario(), 'copy.md'), source(scenario('different message'), 'conflict.md')]);
@@ -113,6 +117,8 @@ test('rejects symlink escapes, traversal and tampered plan paths', async () => {
 });
 test('generated capability is opt-in, autonomous and keeps project artifacts out of managed generation', async () => {
   const built = buildArtifacts(bp);
+  assert.deepEqual(resolveCapabilityPacks(bp), { requested: ['browser-testing'], effective: ['bdd-specification', 'browser-testing'], implicit: ['bdd-specification'] });
+  assert.equal(built.workflows.filter((item) => item.id === 'project-bdd-spec').length, 1);
   assert.deepEqual(built.workflows.slice(-2).map((item) => item.id), ['project-test-infra', 'project-bdd-tests']);
   assert.ok(built.artifacts.some((item) => item.relativePath === '.agents/skills/independent-project-bdd-tests/SKILL.md'));
   assert.ok(built.artifacts.some((item) => item.relativePath.includes('-claude-plugin/skills/independent-project-test-infra/')));
@@ -126,6 +132,82 @@ test('generated capability is opt-in, autonomous and keeps project artifacts out
   await generateKit({ root, blueprint: bp, write: true });
   assert.equal(await readFile(path.join(root, 'tests/e2e/fixtures.ts'), 'utf8'), '// project fixture\n');
   assert.equal((await validateKit(root)).valid, true);
+});
+
+test('analyst specification pack has no execution, Playwright, MCP or infrastructure artifacts', async () => {
+  const built = buildArtifacts(specificationBp);
+  assert.ok(built.workflows.some((item) => item.id === 'project-bdd-spec'));
+  assert.ok(!built.workflows.some((item) => ['project-bdd-tests', 'project-test-infra'].includes(item.id)));
+  const paths = built.artifacts.map((item) => item.relativePath);
+  assert.ok(paths.includes('.projectAgents/testing/specification-cli.mjs'));
+  assert.ok(paths.includes('.projectAgents/testing/schemas/specification-manifest.schema.json'));
+  assert.ok(!paths.some((item) => /infra\.mjs|results\.mjs|testing-profile|bdd-coverage|bdd-run/.test(item)));
+  assert.ok(!paths.some((item) => /playwright|mcp|test-infra|bdd-tests/.test(item)));
+
+  const root = await temp();
+  await generateKit({ root, blueprint: specificationBp, write: true });
+  const input = path.join(root, 'requirements.feature');
+  await writeFile(input, 'Feature: Ready\n Scenario: Works\n  Given a state\n  Then an outcome\n');
+  const result = spawnSync(process.execPath, [path.join(root, '.projectAgents/testing/specification-cli.mjs'), 'inspect-bdd', '--input', input], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).scenarios.length, 1);
+});
+
+test('specification bundle validates immutable GitLab handoff and project-owned hashes', async () => {
+  const root = await temp();
+  const registry = inspectSources([source('Feature: Ready\n Scenario: Works\n  Given a state\n  Then an outcome\n', 'ready.feature')]);
+  const sourceHash = createHash('sha256').update('source').digest('hex');
+  const metadata = {
+    gitlab: { projectPath: 'group/specifications', commitSha: 'a'.repeat(40), bundlePath: 'bdd/specification' },
+    approval: { owner: 'Product analyst', status: 'approved', approvedAt: '2026-11-05T10:00:00Z' },
+    sources: [{ path: 'requirements/ready.md', sha256: sourceHash }],
+  };
+  const manifest = await prepareSpecificationBundle({ metadata, registry, diagnostics: { errors: 0, warnings: 0, infos: 0, unresolved: 0 }, features: [{ path: 'features/ready.feature', content: registry.drafts[0].text }], outputRoot: root });
+  assert.equal(manifest.specReady, true);
+  assert.equal((await validateSpecificationBundle(root)).valid, true);
+  assert.equal(validateGitLabReference(metadata.gitlab).valid, true);
+  assert.equal(validateGitLabReference({ ...metadata.gitlab, commitSha: 'main', branch: 'main' }).valid, false);
+  assert.equal(validateGitLabReference({ ...metadata.gitlab, projectPath: 'https://gitlab.example/group/specifications/-/tree/main' }).valid, false);
+  await writeFile(path.join(root, 'features/ready.feature'), 'tampered');
+  assert.equal((await validateSpecificationBundle(root)).valid, false);
+});
+
+test('pack removal reports managed skills, preserves project artifacts and stops on modified stale runtime', async () => {
+  const root = await temp();
+  await generateKit({ root, blueprint: bp, write: true });
+  const ownedPaths = [
+    'bdd-artifacts/specification/approved.feature',
+    'bdd-artifacts/specification/registry.json',
+    'bdd-artifacts/specification/manifest.json',
+    'bdd-artifacts/execution/mapping.json',
+    '.projectAgents/testing/profile.json',
+    'tests/e2e/fixtures.ts',
+    'bdd-artifacts/execution/run-evidence.json',
+  ];
+  for (const relativePath of ownedPaths) {
+    const target = path.join(root, relativePath);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, `${relativePath}\n`);
+  }
+
+  const noBdd = { ...bp, schemaVersion: 2, project: { ...bp.project, capabilityPacks: [] } };
+  const removal = await generateKit({ root, blueprint: noBdd });
+  assert.deepEqual(removal.managedSkills.removed.map((item) => item.id).sort(), [
+    'independent-project-bdd-spec',
+    'independent-project-bdd-tests',
+    'independent-project-test-infra',
+  ]);
+  assert.ok(removal.managedSkills.removed.every((item) => item.paths.length === 2));
+  assert.deepEqual(removal.logicalSkills.removed.sort(), ['project-bdd-spec', 'project-bdd-tests', 'project-test-infra']);
+  await generateKit({ root, blueprint: noBdd, write: true });
+  for (const relativePath of ownedPaths) assert.equal(await readFile(path.join(root, relativePath), 'utf8'), `${relativePath}\n`);
+
+  const conflictRoot = await temp();
+  await generateKit({ root: conflictRoot, blueprint: bp, write: true });
+  await writeFile(path.join(conflictRoot, '.projectAgents/testing/infra.mjs'), '// modified\n');
+  const specificationOnly = await generateKit({ root: conflictRoot, blueprint: specificationBp });
+  assert.equal(specificationOnly.changes.find((item) => item.relativePath === '.projectAgents/testing/infra.mjs').action, 'conflict');
+  await assert.rejects(generateKit({ root: conflictRoot, blueprint: specificationBp, write: true }), /Generation has conflicts/);
 });
 test('JSON schemas validate actual registry/profile/mapping rather than only parsing as JSON', async () => {
   const ajv = new Ajv({ strict: false });

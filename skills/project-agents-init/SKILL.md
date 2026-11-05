@@ -127,8 +127,18 @@ skills shown in `.projectAgents/AGENTS.md` as the smoke test.
 
 ## Optional browser-testing capability
 
-Offer `browser-testing` only when browser acceptance automation is requested. Its approved blueprint
-adds autonomous `<slug>-test-infra` and `<slug>-bdd-tests` skills, helpers, schemas and references.
+Always show the explicit capability-pack choice; `project.kind` is context, not permission to add a
+pack. Offer `bdd-specification` for an analyst-owned GitLab requirements repository. It adds only
+the autonomous `<slug>-bdd-spec` skill, bundled specification CLI, registry/manifest schemas and
+references. Offer `browser-testing` for the code repository. It implicitly adds
+`bdd-specification`, then adds autonomous `<slug>-test-infra` and `<slug>-bdd-tests` skills plus
+execution helpers, schemas and references.
+
+Before approval show requested, effective and implicitly added packs, followed by the exact logical
+skills and managed Codex/Claude paths that will be created or removed. An empty explicit pack list
+is valid and adds no BDD capability. A legacy blueprint without `capabilityPacks` requires an
+approved migration; do not infer its choice from project kind.
+
 It does not add Playwright dependencies, project test files, a testing profile, MCP, browser installs
 or CI automatically. Run the generated test-infra workflow in the target project to audit and preview
 those separate changes. Preserve existing testing conventions and source confidentiality. Review

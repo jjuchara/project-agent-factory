@@ -73,17 +73,24 @@ project-specific child-agent allowlist.
 
 This separation prevents template upgrades from erasing project knowledge.
 
-## Optional browser-testing capability
+## Optional BDD capabilities
 
-`browser-testing` is opt-in; its stack-specific templates and runtime are isolated under
-`assets/browser-testing` and `scripts/testing`. The logical factory core only selects the capability
-and renders shared workflows/adapters. It does not inspect live applications or install dependencies
-during kit generation. Non-browser kits have no new runtime dependency.
+Capability selection is explicit and independent of project kind. The declarative pack catalog
+expands dependencies deterministically and rejects cycles. `bdd-specification` is the reusable core;
+`browser-testing` depends on it and adds execution. A legacy explicit `browser-testing` selection
+therefore produces the complete set without duplicate files or workflows.
 
-The generated kit contains autonomous helpers, contracts and references under `.projectAgents/testing`.
+The specification layer contains `<slug>-bdd-spec`, a committed bundled parser/validator,
+registry/manifest schemas and references under `.projectAgents/testing`. It needs Node.js only in
+the target repository. The bundle contains MIT-licensed Cucumber and Ajv components with generated
+notices. Specification bundles and normalized features are project-owned rather than generation
+state entries.
+
+The execution layer contains autonomous helpers, contracts and references under `.projectAgents/testing`.
 The separate test-infra workflow creates project-owned profile/test infrastructure only after a
 concrete preview and approval. Test specs, fixtures and evidence are outside managed factory output.
-Markdown import and approved Gherkin remain separate evidence layers; playwright-bdd compiles
-project-owned features/steps into derivative Playwright specs. Test Agents support exploration and
-diagnosis through specialized MCP, without adopting the upstream healer's skip/fixme policy.
+`bdd-tests` accepts only a validated bundle or an immutable GitLab reference with full commit SHA;
+network/auth remains a separate boundary. Playwright-bdd compiles project-owned features/steps into
+derivative specs. Test Agents support exploration and diagnosis through specialized MCP, without
+adopting the upstream healer's skip/fixme policy.
 See [browser testing](browser-testing.md) for ownership, execution and verification boundaries.

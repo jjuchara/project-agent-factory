@@ -71,6 +71,7 @@ Canonical source repository: <https://github.com/jjuchara/project-agent-factory>
 
 ```bash
 npm test
+npm run build:spec-runtime
 npm run validate
 npm run validate:claude
 python3 /path/to/plugin-creator/scripts/validate_plugin.py .
@@ -95,13 +96,18 @@ from any directory: canonical Russian Obsidian notes, a Git development root und
 Personal Codex marketplace symlink and installation are conditional and require separate approval;
 ordinary projects do not receive plugin-specific setup.
 
-## Optional browser acceptance testing
+## Optional BDD capabilities
 
-Add `browser-testing` to an approved blueprint's capability packs to generate autonomous
-`<slug>-test-infra` and `<slug>-bdd-tests` skills for Codex and Claude Code. They audit/configure
-Playwright infrastructure and turn approved Markdown/Gherkin requirements into playwright-bdd
-steps, reproducible tests and outcome-level coverage. Target-project dependencies, integrations,
-authorization and CI setup remain separate operations. See [the browser testing contract](docs/browser-testing.md).
+Blueprint schema v2 requires an explicit capability-pack list; project kind never selects packs.
+Add `bdd-specification` in an analyst-owned requirements repository to generate autonomous
+`<slug>-bdd-spec`, a bundled no-install CLI, registry/diagnostic contracts and immutable GitLab
+handoff. Add `browser-testing` in a code repository to include that specification core once and add
+`<slug>-test-infra` plus `<slug>-bdd-tests` for Playwright execution and evidence. A previous
+explicit `browser-testing` choice remains compatible through dependency expansion.
+
+Generation does not install target-project dependencies, browsers, MCP or CI. Project-owned
+features, bundles, registries, mappings, profiles, fixtures and evidence survive pack removal. See
+[the browser testing contract](docs/browser-testing.md).
 
 For development, run `npm ci` before `npm test`; `npm run test:browser` runs the explicit isolated
 Chromium/BDD/Test Agents MCP smoke and requires an installed Chromium browser and local process/network permissions.

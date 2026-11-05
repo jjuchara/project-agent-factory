@@ -13,8 +13,9 @@ description: Use when updating, reconfiguring, or migrating an existing .project
    user's requested change. Do not repeat the entire initialization interview.
 3. Inspect only evidence affected by the change. Keep facts classified as confirmed, observed,
    inferred, or unknown.
-4. Show a blueprint diff: roles, workflows, permissions, sources, generated paths, migrations, and
-   unresolved conflicts.
+4. Show a blueprint diff: roles, workflows, permissions, sources, requested/effective/implicit
+   capability packs, exact added/removed logical skills and managed paths, migrations, preserved
+   project-owned artifacts, and unresolved conflicts.
 5. Require approval before writing. Run `generate` without `--write`, then apply the approved plan.
 6. Seeded context, docs, and memory are project-owned and must be preserved. Never replace them with
    newer templates. Update them only as explicit project edits with provenance.
@@ -35,8 +36,18 @@ description: Use when updating, reconfiguring, or migrating an existing .project
 
 ## Optional browser-testing capability
 
-Offer `browser-testing` only when browser acceptance automation is requested. Its approved blueprint
-adds autonomous `<slug>-test-infra` and `<slug>-bdd-tests` skills, helpers, schemas and references.
+Never infer packs from `project.kind`. Offer `bdd-specification` for the analyst-owned GitLab
+requirements repository; it adds `<slug>-bdd-spec` and the bundled specification core only. Offer
+`browser-testing` for the code repository; it implicitly depends on `bdd-specification` and adds
+`<slug>-test-infra` plus `<slug>-bdd-tests`. An existing explicit `browser-testing` selection is
+backward compatible and expands to all three skills. A legacy blueprint without an explicit pack
+list requires an approved migration rather than kind-based defaults.
+
+The dry-run must report requested, effective and implicit packs and exact added/removed managed
+skills for both adapters. Removing a pack may delete only unchanged managed runtime files. Stop on
+any modified stale managed path. Preserve project-owned `.feature`, registries, manifests, mappings,
+profiles, fixtures and evidence. Do not use `--force-managed` without separate path-by-path approval.
+
 It does not add Playwright dependencies, project test files, a testing profile, MCP, browser installs
 or CI automatically. Run the generated test-infra workflow in the target project to audit and preview
 those separate changes. Preserve existing testing conventions and source confidentiality. Review

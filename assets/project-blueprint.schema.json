@@ -19,10 +19,10 @@
     }
   },
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "enum": [1, 2] },
     "project": {
       "type": "object",
-      "required": ["name", "slug", "kind", "summary", "workingLanguage"],
+      "required": ["name", "slug", "kind", "summary", "workingLanguage", "capabilityPacks"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
@@ -35,7 +35,7 @@
         "artifactTypes": { "type": "array", "items": { "type": "string" } },
         "capabilityPacks": {
           "type": "array",
-          "items": { "enum": ["coding", "research", "documentation", "source-verification", "design", "security", "release", "browser-testing"] },
+          "items": { "enum": ["coding", "research", "documentation", "source-verification", "design", "security", "release", "bdd-specification", "browser-testing"] },
           "uniqueItems": true
         }
       },

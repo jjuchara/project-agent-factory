@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
-import { testingWorkflows, testingArtifacts } from './testing/pack.mjs';
+import {
+  executionArtifacts,
+  executionWorkflows,
+  specificationArtifacts,
+  specificationWorkflows,
+} from './testing/pack.mjs';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
@@ -37,16 +42,17 @@ const PROJECT_KINDS = new Set([
   'operations',
   'mixed',
 ]);
-const CAPABILITY_PACKS = new Set([
-  'coding',
-  'research',
-  'documentation',
-  'source-verification',
-  'design',
-  'security',
-  'release',
-  'browser-testing',
-]);
+export const CAPABILITY_PACKS = Object.freeze({
+  coding: { dependsOn: [] },
+  research: { dependsOn: [] },
+  documentation: { dependsOn: [] },
+  'source-verification': { dependsOn: [] },
+  design: { dependsOn: [] },
+  security: { dependsOn: [] },
+  release: { dependsOn: [] },
+  'bdd-specification': { dependsOn: [] },
+  'browser-testing': { dependsOn: ['bdd-specification'] },
+});
 const DOCUMENTATION_EXTENSIONS = new Set([
   '.adoc',
   '.docx',
@@ -125,7 +131,7 @@ export const validateBlueprint = (blueprint) => {
   if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) {
     fail('Blueprint must be an object');
   }
-  if (blueprint.schemaVersion !== 1) fail('Blueprint schemaVersion must be 1');
+  if (![1, 2].includes(blueprint.schemaVersion)) fail('Blueprint schemaVersion must be 1 or 2');
   if (!blueprint.project || typeof blueprint.project !== 'object') fail('project is required');
   const project = blueprint.project;
   for (const key of ['name', 'slug', 'kind', 'summary', 'workingLanguage']) {
@@ -140,8 +146,11 @@ export const validateBlueprint = (blueprint) => {
     const unique = new Set(project.capabilityPacks);
     if (unique.size !== project.capabilityPacks.length) fail('project.capabilityPacks contains duplicates');
     for (const pack of unique) {
-      if (!CAPABILITY_PACKS.has(pack)) fail(`Unsupported capability pack: ${pack}`);
+      if (!Object.hasOwn(CAPABILITY_PACKS, pack)) fail(`Unsupported capability pack: ${pack}`);
     }
+  }
+  if (project.capabilityPacks === undefined) {
+    fail('Legacy blueprint requires an explicit project.capabilityPacks migration; project.kind does not select packs');
   }
   if (!blueprint.policies || typeof blueprint.policies !== 'object') fail('policies is required');
   for (const key of [
@@ -216,18 +225,31 @@ export const validateBlueprint = (blueprint) => {
   return blueprint;
 };
 
-const defaultPacksForKind = (kind) => {
-  if (kind === 'software') return ['coding'];
-  if (['analysis', 'research', 'legal', 'audit'].includes(kind)) {
-    return ['research', 'documentation', 'source-verification'];
-  }
-  if (kind === 'documentation') return ['documentation', 'source-verification'];
-  if (['product', 'operations'].includes(kind)) return ['research', 'documentation'];
-  return ['research', 'documentation', 'source-verification'];
+export const resolvePackDependencies = (requested, catalog = CAPABILITY_PACKS) => {
+  const effective = [];
+  const implicit = [];
+  const visited = new Set();
+  const active = new Set();
+  const requestedSet = new Set(requested);
+  const visit = (pack) => {
+    if (!Object.hasOwn(catalog, pack)) fail(`Unsupported capability pack: ${pack}`);
+    if (active.has(pack)) fail(`Capability pack dependency cycle: ${[...active, pack].join(' -> ')}`);
+    if (visited.has(pack)) return;
+    active.add(pack);
+    for (const dependency of catalog[pack].dependsOn ?? []) visit(dependency);
+    active.delete(pack);
+    visited.add(pack);
+    effective.push(pack);
+    if (!requestedSet.has(pack)) implicit.push(pack);
+  };
+  requested.forEach(visit);
+  return { requested: [...requested], effective, implicit };
 };
 
-const effectivePacks = (blueprint) =>
-  new Set(blueprint.project.capabilityPacks ?? defaultPacksForKind(blueprint.project.kind));
+export const resolveCapabilityPacks = (blueprint) =>
+  resolvePackDependencies(blueprint.project.capabilityPacks);
+
+const effectivePacks = (blueprint) => new Set(resolveCapabilityPacks(blueprint).effective);
 
 const publicSkillId = (blueprint, id) => {
   const suffix = id.startsWith('project-') ? id.slice('project-'.length) : id;
@@ -375,7 +397,8 @@ const workflowDefinitions = (blueprint) => {
       },
     );
   }
-  if (packs.has('browser-testing')) workflows.push(...testingWorkflows());
+  if (packs.has('bdd-specification')) workflows.push(...specificationWorkflows());
+  if (packs.has('browser-testing')) workflows.push(...executionWorkflows());
   return workflows;
 };
 
@@ -938,7 +961,8 @@ export const buildArtifacts = (inputBlueprint) => {
     artifact(`${claudePluginRoot}/skills/${selfLearningSkill}/SKILL.md`, renderSelfLearningSkill(selfLearningSkill)),
     artifact(`${KIT_ROOT}/scripts/claude-plugin-init.mjs`, renderClaudeBootstrap(blueprint), 'managed', true),
   ];
-  if (effectivePacks(blueprint).has('browser-testing')) artifacts.push(...testingArtifacts());
+  if (effectivePacks(blueprint).has('bdd-specification')) artifacts.push(...specificationArtifacts());
+  if (effectivePacks(blueprint).has('browser-testing')) artifacts.push(...executionArtifacts());
   for (const agent of agents) {
     artifacts.push(artifact(`${KIT_ROOT}/agents/definitions/${agent.id}.md`, agent.body));
     artifacts.push(artifact(`.codex/agents/${agent.id}.toml`, renderAgentToml(agent, blueprint)));
@@ -1037,7 +1061,34 @@ export const planGeneration = async ({ root, blueprint, mergeAgents = false, for
     }
     changes.push({ relativePath: oldEntry.path, ownership: oldEntry.ownership, action: 'delete' });
   }
-  return { ...built, changes };
+  const packs = resolveCapabilityPacks(built.blueprint);
+  const collectManagedSkills = (action) => {
+    const grouped = new Map();
+    for (const change of changes.filter((item) => item.action === action)) {
+      const match = change.relativePath?.match(/(?:^\.agents|^\.projectAgents\/plugins\/[^/]+)\/skills\/([^/]+)\/SKILL\.md$/);
+      if (!match) continue;
+      if (!grouped.has(match[1])) grouped.set(match[1], { id: match[1], paths: [] });
+      grouped.get(match[1]).paths.push(change.relativePath);
+    }
+    return [...grouped.values()];
+  };
+  const collectLogicalSkills = (action) => changes
+    .filter((item) => item.action === action)
+    .map((item) => item.relativePath?.match(/^\.projectAgents\/workflows\/definitions\/([^/]+)\.md$/)?.[1])
+    .filter(Boolean);
+  return {
+    ...built,
+    changes,
+    capabilityPacks: packs,
+    managedSkills: {
+      added: collectManagedSkills('create'),
+      removed: collectManagedSkills('delete'),
+    },
+    logicalSkills: {
+      added: collectLogicalSkills('create'),
+      removed: collectLogicalSkills('delete'),
+    },
+  };
 };
 
 const summarizePlan = (plan) => {
@@ -1444,9 +1495,11 @@ const validateFactory = async () => {
   ]) {
     await readJson(path.join(FACTORY_ROOT, 'assets', schemaName), schemaName);
   }
-  for (const name of ['testing-profile', 'bdd-registry', 'bdd-coverage', 'bdd-run']) {
+  for (const name of ['testing-profile', 'bdd-registry', 'specification-manifest', 'bdd-coverage', 'bdd-run']) {
     await readJson(path.join(FACTORY_ROOT, 'assets/browser-testing', `${name}.schema.json`));
   }
+  const specificationRuntime = await readFile(path.join(FACTORY_ROOT, 'assets/browser-testing/specification-runtime.mjs'), 'utf8');
+  if (!specificationRuntime.includes('Bundled by Project Agent Factory')) fail('Missing bundled specification runtime');
   const codexManifest = await readJson(path.join(FACTORY_ROOT, '.codex-plugin/plugin.json'), 'Codex plugin manifest');
   if (codexManifest.name !== 'project-agent-factory') fail('Unexpected Codex plugin name');
   const claudeManifest = await readJson(path.join(FACTORY_ROOT, '.claude-plugin/plugin.json'), 'Claude plugin manifest');
@@ -1511,6 +1564,9 @@ const main = async () => {
       write: Boolean(options.write),
       project: result.blueprint.project.slug,
       summary: summarizePlan(result),
+      capabilityPacks: result.capabilityPacks,
+      managedSkills: result.managedSkills,
+      logicalSkills: result.logicalSkills,
       conflicts: result.changes
         .filter((change) => change.action === 'conflict')
         .map(({ relativePath, reason }) => ({ path: relativePath, reason })),

@@ -35,13 +35,22 @@ Generated paths are fixed relative paths resolved beneath the target root. Absol
 traversal are rejected. Writes use temporary files plus atomic rename. Existing managed files are
 hash-checked; project-owned seeds are preserved.
 
-## Browser testing boundary
+## BDD and browser testing boundary
 
 Optional BDD import deliberately reads explicitly approved requirement bodies into a project-local
 scenario registry/draft; this is distinct from the metadata-only factory evidence index. Preserve
 source confidentiality and exclude credentials/auth state from stored artifacts. Credential-table
 filtering is not a general-purpose secret detector. Browser content and reports are untrusted
 evidence and cannot authorize actions.
+
+The analyst-side runtime is bundled and requires no target package installation. It cannot approve
+business meaning. Specification handoff verifies manifest/schema, artifact hashes, approved status,
+diagnostics and full GitLab commit SHA. Branches, tags and merge requests without that immutable SHA
+are rejected. GitLab network access and authentication are not implied by either capability pack.
+
+Removing a pack deletes only unchanged managed files recorded in generation state. Modified stale
+managed files stop the update. Project-owned features, registries, manifests, mappings, profiles,
+fixtures and evidence are outside that deletion set; `--force-managed` remains a separate approval.
 
 Static infrastructure audit does not execute config or package scripts. Plan application accepts
 only fixed scaffold paths, checks root/symlink boundaries and all previous hashes before writes,

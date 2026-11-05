@@ -1,6 +1,6 @@
 # Infrastructure adapter
 
-Tested baseline to verify during release: @playwright/test 1.64.1, playwright-bdd 9.2.1, @cucumber/gherkin 42.0.1, @cucumber/messages 32.0.0, Ajv 8.20.0. These are optional target-project development dependencies, not requirements for non-browser kits. Dependencies need Node versions supported by their exact package manifests; use Node 22+ for the baseline and verify existing project engines. The factory's own deterministic generation remains Node 20+.
+Tested baseline to verify during release: @playwright/test 1.64.1, playwright-bdd 9.2.1, @cucumber/gherkin 42.0.1, @cucumber/messages 32.0.0, Ajv 8.20.0. These are optional target-project development dependencies, not requirements for non-browser kits. Dependencies need Node versions supported by their exact package manifests; use Node 22+ for the baseline and verify existing project engines. The factory's own deterministic generation requires Node 20.10+.
 
 `audit-infra` inspects root-level metadata only; select a package in a monorepo. It deliberately does not execute JS configs, read environment files or check live auth/network. Existing Playwright configurations require an explicit adaptation rather than a second competing suite. `plan-infra` creates an additive standalone scaffold only when it can preserve files. `apply-infra` takes a reviewed temporary JSON plan plus --write, verifies root/path/hash preconditions and runs no shell. Review package scripts and content as code. No filesystem transaction spans all files; partial filesystem failures must be inspected.
 

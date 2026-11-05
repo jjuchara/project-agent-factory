@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-agent-factory.local/schemas/specification-manifest.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "runtimeVersion", "gitlab", "approval", "sources", "scenarios", "diagnostics", "specReady", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runtimeVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "gitlab": {
+      "type": "object",
+      "required": ["projectPath", "commitSha", "bundlePath"],
+      "properties": {
+        "projectPath": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)+$" },
+        "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "bundlePath": { "type": "string", "minLength": 1 },
+        "mergeRequest": {
+          "type": "object",
+          "required": ["iid", "url"],
+          "properties": { "iid": { "type": "integer", "minimum": 1 }, "url": { "type": "string", "format": "uri" } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "approval": {
+      "type": "object",
+      "required": ["owner", "status"],
+      "properties": {
+        "owner": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["draft", "in-review", "approved", "rejected"] },
+        "approvedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/hash" } },
+        "additionalProperties": false
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "signature"],
+        "properties": { "id": { "type": "string", "pattern": "^bdd-[0-9a-f]{12}$" }, "signature": { "$ref": "#/$defs/hash" } },
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["errors", "warnings", "infos", "unresolved"],
+      "properties": {
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "infos": { "type": "integer", "minimum": 0 },
+        "unresolved": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "specReady": { "type": "boolean" },
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["feature", "registry", "diagnostics", "supporting"] },
+          "sha256": { "$ref": "#/$defs/hash" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": { "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" } },
+  "allOf": [
+    {
+      "if": { "properties": { "specReady": { "const": true } }, "required": ["specReady"] },
+      "then": {
+        "properties": {
+          "approval": { "properties": { "status": { "const": "approved" } } },
+          "diagnostics": { "properties": { "errors": { "const": 0 }, "unresolved": { "const": 0 } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "approval": { "properties": { "status": { "const": "approved" } }, "required": ["status"] } } },
+      "then": { "properties": { "approval": { "required": ["approvedAt"] } } }
+    }
+  ],
+  "additionalProperties": false
+}
