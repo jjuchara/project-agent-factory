@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 const asset = (name) => readFileSync(new URL(`../../assets/browser-testing/${name}`, import.meta.url), 'utf8');
 export const specificationWorkflows = () => [
-  { id: 'project-bdd-spec', description: 'Validate, normalize and hand off approved BDD specifications without changing business meaning.', body: asset('bdd-spec.md') },
+  { id: 'project-bdd-spec', description: 'Run check bdd: clarify human requirements, convert to technical BDD, validate and hand off analyst-approved specifications.', body: asset('bdd-spec.md') },
 ];
 export const executionWorkflows = () => [
   { id: 'project-test-infra', description: 'Audit and configure project Playwright/BDD infrastructure with an approved change plan.', body: asset('test-infra.md') },
@@ -11,8 +11,9 @@ const managed = (relativePath, content) => ({ relativePath, content, ownership: 
 export const specificationArtifacts = () => [
   managed('.projectAgents/testing/specification-cli.mjs', asset('specification-runtime.mjs')),
   managed('.projectAgents/testing/NOTICES.md', asset('specification-runtime-NOTICES.md')),
-  ...['bdd-registry', 'specification-manifest'].map((name) => managed(`.projectAgents/testing/schemas/${name}.schema.json`, asset(`${name}.schema.json`))),
+  ...['bdd-registry', 'specification-manifest', 'bdd-conversion'].map((name) => managed(`.projectAgents/testing/schemas/${name}.schema.json`, asset(`${name}.schema.json`))),
   managed('.projectAgents/testing/references/specification.md', asset('specification-reference.md')),
+  managed('.projectAgents/testing/references/human-to-technical.md', asset('human-to-technical.md')),
 ];
 export const executionArtifacts = () => [
   ...['cli.mjs', 'infra.mjs', 'results.mjs'].map((name) => managed(`.projectAgents/testing/${name}`, readFileSync(new URL(name, import.meta.url), 'utf8'))),

@@ -111,3 +111,5 @@ features, bundles, registries, mappings, profiles, fixtures and evidence survive
 
 For development, run `npm ci` before `npm test`; `npm run test:browser` runs the explicit isolated
 Chromium/BDD/Test Agents MCP smoke and requires an installed Chromium browser and local process/network permissions.
+
+Human BDD requirements can be checked with the generated `<slug>-bdd-spec` workflow (`check bdd`): it asks blocking analyst questions before technical conversion and binds explicit approval to the current report and scenario signatures. See [BDD workflow and manual acceptance](docs/browser-testing.md#human-to-technical-conversion-and-manual-acceptance).

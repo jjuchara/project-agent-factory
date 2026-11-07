@@ -62,6 +62,12 @@
       },
       "additionalProperties": false
     },
+    "conversion": {
+      "type": "object",
+      "required": ["report", "approval"],
+      "properties": { "report": { "const": "conversion.json" }, "approval": { "const": "conversion-approval.json" } },
+      "additionalProperties": false
+    },
     "specReady": { "type": "boolean" },
     "artifacts": {
       "type": "array",

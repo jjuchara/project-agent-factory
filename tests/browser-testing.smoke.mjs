@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { conversionFixture, approveConversion } from './fixtures/conversion.mjs';
 import { generateKit } from '../scripts/project-agents.mjs';
 import { planInfrastructure, applyInfrastructure } from '../scripts/testing/infra.mjs';
 
@@ -33,14 +34,45 @@ try {
   const steps = `import { expect } from '@playwright/test';\nimport { Given, When, Then } from '../fixtures';\nGiven('an isolated view linked to a record', async ({ page }) => { await page.goto(process.env.PAF_DEMO_BUG ? '/?bug=1' : '/'); });\nWhen('the view is removed', async ({ page }) => { await page.getByRole('button', { name: 'Remove view' }).click(); });\nThen('the view is absent', async ({ page }) => { await expect(page.getByRole('region', { name: 'Views', exact: true }).getByRole('article')).toHaveCount(0); });\nThen('the linked record remains', async ({ page }) => { await expect(page.getByRole('region', { name: 'Records', exact: true }).getByRole('article')).toHaveText('Example record', { timeout: 1000 }); });\n`;
   await writeFile(path.join(root, 'tests/e2e/steps/removal.ts'), steps);
   const cli = path.join(root, '.projectAgents/testing/cli.mjs');
-  const inspect = await run(process.execPath, [cli, 'inspect-bdd', '--input', 'tests/e2e/features/removal.feature']);
-  assert.equal(inspect.code, 0, inspect.output);
-  const registry = JSON.parse(inspect.output);
-  await writeFile(path.join(root, 'registry.json'), inspect.output);
+  // Separate analyst repository: questions -> clarified technical draft -> explicit simulated
+  // approval -> portable bundle -> consumer validation -> real browser execution below.
+  const analystRoot = await mkdtemp(path.join(os.tmpdir(), 'paf-analyst-smoke-'));
+  await generateKit({ root: analystRoot, blueprint: { ...bp, project: { ...bp.project, kind: 'analysis', capabilityPacks: ['bdd-specification'] } }, write: true });
+  const original = path.join(analystRoot, 'requirements.md');
+  const { report, sources } = conversionFixture('Remove only the view. The linked record must remain.', feature, original, 'features/removal.feature');
+  await writeFile(original, sources[0].text);
+  const conversionFile = path.join(analystRoot, 'conversion.json');
+  const analystCli = path.join(analystRoot, '.projectAgents/testing/specification-cli.mjs');
+  const checkArgs = [analystCli, 'check-bdd', '--conversion', conversionFile, '--input', original];
+  const blocked = structuredClone(report); blocked.status = 'needs-clarification'; blocked.technicalDraft = [];
+  blocked.questions = [{ id: 'Q1', source: original, line: 1, question: 'Delete the record too?', reason: 'Entity boundary must be explicit' }];
+  await writeFile(conversionFile, JSON.stringify(blocked));
+  const questions = await run(process.execPath, checkArgs);
+  assert.notEqual(questions.code, 0); assert.equal(JSON.parse(questions.output).registry, undefined);
+  report.decisions = [{ questionId: 'Q1', answer: 'Preserve the record', confirmedBy: 'Synthetic analyst' }];
+  await writeFile(conversionFile, JSON.stringify(report));
+  const checked = await run(process.execPath, checkArgs);
+  assert.equal(checked.code, 0, checked.output);
+  const result = JSON.parse(checked.output); assert.equal(result.status, 'needs-approval');
+  const approval = approveConversion(result);
+  const approvalFile = path.join(analystRoot, 'approval.json'); await writeFile(approvalFile, JSON.stringify(approval));
+  assert.equal(JSON.parse((await run(process.execPath, [...checkArgs, '--approval', approvalFile])).output).specReady, true);
+  const metadataFile = path.join(analystRoot, 'metadata.json');
+  await writeFile(metadataFile, JSON.stringify({ gitlab: { projectPath: 'demo/analyst-specifications', commitSha: 'a'.repeat(40), bundlePath: 'bdd/removal' }, approval: { owner: approval.owner, status: approval.status, approvedAt: approval.approvedAt }, sources: report.sources }));
+  const registryFile = path.join(analystRoot, 'registry.json'); await writeFile(registryFile, JSON.stringify(result.registry));
+  const diagnosticsFile = path.join(analystRoot, 'diagnostics.json'); await writeFile(diagnosticsFile, '{}');
+  const featureFile = path.join(analystRoot, 'removal.feature'); await writeFile(featureFile, feature);
+  const bundle = path.join(analystRoot, 'bundle');
+  const prepared = await run(process.execPath, [analystCli, 'prepare-bundle', '--conversion', conversionFile, '--approval', approvalFile, '--input', original, '--metadata', metadataFile, '--registry', registryFile, '--diagnostics', diagnosticsFile, '--feature', featureFile, '--output', bundle, '--write']);
+  assert.equal(prepared.code, 0, prepared.output);
+  const handoff = await run(process.execPath, [path.join(root, '.projectAgents/testing/specification-cli.mjs'), 'validate-bundle', '--bundle', bundle]);
+  assert.equal(handoff.code, 0, handoff.output);
+  const registry = result.registry;
+  await writeFile(path.join(root, 'registry.json'), JSON.stringify(registry));
   const record = registry.scenarios[0];
   const mapping = { schemaVersion: 1, projects: ['bdd-chromium'], scenarios: [{ id: record.id, approvedSignature: record.variants[0].signature, assertions: record.variants[0].expectations.map((item) => ({ expectationId: item.id, file: 'tests/e2e/steps/removal.ts', symbol: item.text })) }] };
   await writeFile(path.join(root, 'mapping.json'), JSON.stringify(mapping));
-  const generate = await run(process.execPath, ['node_modules/playwright-bdd/dist/cli/index.js', '-c', 'playwright.bdd.config.ts']);
+  const generate = await run(process.execPath, ['node_modules/playwright-bdd/dist/cli/index.js', 'test', '-c', 'playwright.bdd.config.ts']);
   assert.equal(generate.code, 0, generate.output);
   const testArgs = ['node_modules/playwright/cli.js', 'test', '-c', 'playwright.bdd.config.ts', '--project=bdd-chromium'];
   const good = await run(process.execPath, testArgs);
@@ -86,7 +118,7 @@ try {
   assert.ok(!snapshot.isError, JSON.stringify(snapshot));
   assert.ok(JSON.stringify(snapshot).includes('Remove view'));
   await request('tools/call', { name: 'browser_close', arguments: {} });
-  console.log(JSON.stringify({ valid: true, root, bdd: 'passed', intentionalDefect: 'failed-as-expected', coverage: 'passed-and-failed-as-expected', mcp: 'initialized, seed executed, browser snapshot inspected', platformSessions: 'not-run' }, null, 2));
+  console.log(JSON.stringify({ valid: true, root, conversion: 'questions, answers, approval and separate-repository bundle handoff passed', bdd: 'passed', intentionalDefect: 'failed-as-expected', coverage: 'passed-and-failed-as-expected', mcp: 'initialized, seed executed, browser snapshot inspected', platformSessions: 'not-run' }, null, 2));
 } finally {
   mcp?.kill('SIGTERM');
   await new Promise((resolve) => server.close(resolve));

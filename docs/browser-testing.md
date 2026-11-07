@@ -27,9 +27,13 @@ download dependencies or locate the Factory checkout. Bundled MIT notices are ge
 the runtime.
 
 ```bash
-node .projectAgents/testing/specification-cli.mjs inspect-bdd --input requirements.md
-node .projectAgents/testing/specification-cli.mjs inspect-bdd --input requirements.md --previous registry.json
-node .projectAgents/testing/specification-cli.mjs prepare-bundle --metadata metadata.json --registry registry.json --diagnostics diagnostics.json --feature approved.feature --output bdd-bundle --write
+# First invoke <slug>-bdd-spec with: check bdd requirements.md
+# The agent asks questions and prepares the reviewed conversion report.
+node .projectAgents/testing/specification-cli.mjs check-bdd --conversion conversion.json --input requirements.md
+# On reimport, add --previous registry.json.
+# After explicit analyst approval bound to conversionHash and scenarios:
+node .projectAgents/testing/specification-cli.mjs check-bdd --conversion conversion.json --input requirements.md --approval approval.json
+node .projectAgents/testing/specification-cli.mjs prepare-bundle --conversion conversion.json --approval approval.json --input requirements.md --metadata metadata.json --registry registry.json --diagnostics diagnostics.json --feature approved.feature --output bdd-bundle --write
 node .projectAgents/testing/specification-cli.mjs validate-bundle --bundle bdd-bundle
 ```
 
@@ -169,3 +173,20 @@ messages). An additional generated-plugin `--strict` check reports the pre-exist
 `<slug>-claude-plugin` naming warning; changing that naming/installation contract is not part of
 this capability. Normal manifest validation succeeds with the warning. Public directory submission
 also has separate README/license/icon requirements, unrelated to local project activation.
+
+## Human-to-technical conversion and manual acceptance
+
+`check bdd` is a conversational request to `<slug>-bdd-spec`, not an OS executable. The agent follows the project's analyst guide and the generated `human-to-technical.md` reference before importing Gherkin. Ambiguity produces consolidated questions and blocks affected scenarios. Confirmed answers lead to a technical feature and a schema-validated report with original hashes, eight readiness categories, decisions and step traceability. The CLI has no LLM integration and does not prove business meaning. Explicit analyst approval binds the conversion hash and exact scenario signatures. A source/answer/draft change requires reapproval.
+
+New prepare-bundle calls include `--conversion conversion.json --approval approval.json --input requirements.md` in addition to metadata, registry, diagnostics, feature and output arguments above. Repeat --input for all originals and any guides/answer files affecting conversion. Use feature paths `features/<basename>.feature` in technicalDraft. Metadata sources and approval must match the conversion artifacts. Validate the resulting bundle in the code repository before generating tests. Bundles without conversion evidence remain readable for compatibility only.
+
+Manual acceptance in an analyst repository:
+
+1. Initialize the updated Factory with an explicit bdd-specification pack, or update an existing kit using its approved blueprint. Use only the analyst pack; no Playwright/npm installation is required in that repository. The globally installed Factory plugin may be cached: use the current source checkout for generation if the cached plugin is older. Open a new Codex session for the generated skills.
+2. Invoke `$<slug>-bdd-spec check bdd <requirements.md>` and identify the canonical analyst guide. Expect questions before a technical model when information is missing. Parser success alone must not yield readiness.
+3. Answer the questions. Review the source-to-technical diff: no invented outcomes, unchanged business values, retained intermediate checks, stable analytical IDs and explicit business oracles.
+4. Explicitly approve the current technical version. Supply canonical source revision metadata and a full GitLab SHA. Ask the workflow to prepare and validate a bundle. The concise final summary must state readiness for developer/tester handoff only after this succeeds.
+5. Change a source or answer and rerun: prior approval must stop being valid. Try an unanswered question: affected scenarios must remain blocked.
+6. In the code repository invoke `$<slug>-bdd-tests` with verify-handoff and the validated bundle, then request generation/run in an authorized test environment. Check each expected result, cleanup, coverage and execution evidence separately.
+
+2026-11-07 verification: 48 unit/regression tests pass. The separate analyst-to-consumer smoke validates questions, simulated answers/approval, bundle handoff, actual bddgen/Chromium execution, coverage and expected failure of an intentional defect; Test Agents MCP also passes. Live conversational agent sessions and GitLab fetch are not simulated by a CLI smoke and remain manual acceptance gates.

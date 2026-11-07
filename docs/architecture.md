@@ -94,3 +94,5 @@ network/auth remains a separate boundary. Playwright-bdd compiles project-owned 
 derivative specs. Test Agents support exploration and diagnosis through specialized MCP, without
 adopting the upstream healer's skip/fixme policy.
 See [browser testing](browser-testing.md) for ownership, execution and verification boundaries.
+
+The bdd-specification layer includes an agent-only human-to-technical converter and a deterministic check-bdd gate. The gate validates conversion schema, source hashes, readiness categories, traceability and Gherkin; it does not call an LLM or certify semantic truth. New bundles carry conversion and analyst approval evidence bound to exact scenario signatures. Legacy bundles remain compatible.

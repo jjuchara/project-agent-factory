@@ -107,7 +107,8 @@ export function inspectSources(sources, previous = null) {
           if (!child.scenario) continue;
           const scenario = child.scenario;
           const explicitId = scenario.tags.find((tag) => /^@bdd-[a-f0-9]{12}$/.test(tag.name))?.name.slice(1);
-          const key = explicitId ?? identity([feature.name, ...rules.map((rule) => rule.name), scenario.name].join('::'));
+          const analyticId = scenario.tags.find((tag) => /^@analytic-id-.+/.test(tag.name))?.name;
+          const key = explicitId ?? analyticId ?? identity([feature.name, ...rules.map((rule) => rule.name), scenario.name].join('::'));
           const steps = [...inherited, ...background, ...scenario.steps].map((step) => ({
             keyword: step.keyword.trim(), text: step.text,
             line: normalized.sourceLines[offset + step.location.line - 1] ?? step.location.line,

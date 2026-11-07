@@ -1867,8 +1867,8 @@ var require_keyword = __commonJS({
       var _a;
       const { gen, keyword, schema, parentSchema, $data, it } = cxt;
       checkAsyncKeyword(it, def);
-      const validate = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
-      const validateRef = useKeyword(gen, keyword, validate);
+      const validate2 = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
+      const validateRef = useKeyword(gen, keyword, validate2);
       const valid = gen.let("valid");
       cxt.block$data(valid, validateKeyword);
       cxt.ok((_a = def.valid) !== null && _a !== void 0 ? _a : valid);
@@ -2941,28 +2941,28 @@ var require_compile = __commonJS({
         if (this.opts.code.process)
           sourceCode = this.opts.code.process(sourceCode, sch);
         const makeValidate = new Function(`${names_1.default.self}`, `${names_1.default.scope}`, sourceCode);
-        const validate = makeValidate(this, this.scope.get());
-        this.scope.value(validateName, { ref: validate });
-        validate.errors = null;
-        validate.schema = sch.schema;
-        validate.schemaEnv = sch;
+        const validate2 = makeValidate(this, this.scope.get());
+        this.scope.value(validateName, { ref: validate2 });
+        validate2.errors = null;
+        validate2.schema = sch.schema;
+        validate2.schemaEnv = sch;
         if (sch.$async)
-          validate.$async = true;
+          validate2.$async = true;
         if (this.opts.code.source === true) {
-          validate.source = { validateName, validateCode, scopeValues: gen._values };
+          validate2.source = { validateName, validateCode, scopeValues: gen._values };
         }
         if (this.opts.unevaluated) {
           const { props, items } = schemaCxt;
-          validate.evaluated = {
+          validate2.evaluated = {
             props: props instanceof codegen_1.Name ? void 0 : props,
             items: items instanceof codegen_1.Name ? void 0 : items,
             dynamicProps: props instanceof codegen_1.Name,
             dynamicItems: items instanceof codegen_1.Name
           };
-          if (validate.source)
-            validate.source.evaluated = (0, codegen_1.stringify)(validate.evaluated);
+          if (validate2.source)
+            validate2.source.evaluated = (0, codegen_1.stringify)(validate2.evaluated);
         }
-        sch.validate = validate;
+        sch.validate = validate2;
         return sch;
       } catch (e) {
         delete sch.validate;
@@ -4394,7 +4394,7 @@ var require_core = __commonJS({
         uriResolver
       };
     }
-    var Ajv2 = class {
+    var Ajv3 = class {
       constructor(opts = {}) {
         this.schemas = {};
         this.refs = {};
@@ -4764,9 +4764,9 @@ var require_core = __commonJS({
         }
       }
     };
-    Ajv2.ValidationError = validation_error_1.default;
-    Ajv2.MissingRefError = ref_error_1.default;
-    exports.default = Ajv2;
+    Ajv3.ValidationError = validation_error_1.default;
+    Ajv3.MissingRefError = ref_error_1.default;
+    exports.default = Ajv3;
     function checkOptions(checkOpts, options, msg, log = "error") {
       for (const key in checkOpts) {
         const opt = key;
@@ -6462,8 +6462,8 @@ var require_dynamicAnchor = __commonJS({
       const { gen, it } = cxt;
       it.schemaEnv.root.dynamicAnchors[anchor] = true;
       const v = (0, codegen_1._)`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor)}`;
-      const validate = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
-      gen.if((0, codegen_1._)`!${v}`, () => gen.assign(v, validate));
+      const validate2 = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
+      gen.if((0, codegen_1._)`!${v}`, () => gen.assign(v, validate2));
     }
     exports.dynamicAnchor = dynamicAnchor;
     function _getValidate(cxt) {
@@ -6512,11 +6512,11 @@ var require_dynamicRef = __commonJS({
           _callRef(it.validateName, valid)();
         }
       }
-      function _callRef(validate, valid) {
+      function _callRef(validate2, valid) {
         return valid ? () => gen.block(() => {
-          (0, ref_1.callRef)(cxt, validate);
+          (0, ref_1.callRef)(cxt, validate2);
           gen.let(valid, true);
-        }) : () => (0, ref_1.callRef)(cxt, validate);
+        }) : () => (0, ref_1.callRef)(cxt, validate2);
       }
     }
     exports.dynamicRef = dynamicRef;
@@ -9771,8 +9771,8 @@ var require_Reflect = __commonJS({
 });
 
 // scripts/testing/spec-cli.mjs
-var import__ = __toESM(require__(), 1);
-import { createHash as createHash2 } from "node:crypto";
+var import__2 = __toESM(require__(), 1);
+import { createHash as createHash3 } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -9841,6 +9841,12 @@ var specification_manifest_schema_default = {
         infos: { type: "integer", minimum: 0 },
         unresolved: { type: "integer", minimum: 0 }
       },
+      additionalProperties: false
+    },
+    conversion: {
+      type: "object",
+      required: ["report", "approval"],
+      properties: { report: { const: "conversion.json" }, approval: { const: "conversion-approval.json" } },
       additionalProperties: false
     },
     specReady: { type: "boolean" },
@@ -19679,7 +19685,8 @@ function inspectSources(sources, previous = null) {
           if (!child.scenario) continue;
           const scenario = child.scenario;
           const explicitId = scenario.tags.find((tag) => /^@bdd-[a-f0-9]{12}$/.test(tag.name))?.name.slice(1);
-          const key = explicitId ?? identity([feature.name, ...rules.map((rule) => rule.name), scenario.name].join("::"));
+          const analyticId = scenario.tags.find((tag) => /^@analytic-id-.+/.test(tag.name))?.name;
+          const key = explicitId ?? analyticId ?? identity([feature.name, ...rules.map((rule) => rule.name), scenario.name].join("::"));
           const steps = [...inherited, ...background, ...scenario.steps].map((step) => ({
             keyword: step.keyword.trim(),
             text: step.text,
@@ -19739,20 +19746,283 @@ function checkCoverage(registry, mapping, run = null) {
   return { schemaVersion: 1, unresolved, valid: unresolved.length === 0 && results.length > 0 && results.every((item) => item.coverage === "complete" && item.execution === "passed"), scenarios: results, note: "Assertion mappings and run evidence require review; metadata alone does not prove semantic correctness." };
 }
 
+// assets/browser-testing/bdd-conversion.schema.json
+var bdd_conversion_schema_default = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://project-agent-factory.local/schemas/bdd-conversion.schema.json",
+  type: "object",
+  properties: {
+    schemaVersion: {
+      const: 1
+    },
+    status: {
+      enum: [
+        "needs-clarification",
+        "ready"
+      ]
+    },
+    sources: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            minLength: 1
+          },
+          sha256: {
+            type: "string",
+            pattern: "^[0-9a-f]{64}$"
+          }
+        },
+        required: [
+          "path",
+          "sha256"
+        ],
+        additionalProperties: false
+      },
+      minItems: 1
+    },
+    checks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: {
+            enum: [
+              "source-authority",
+              "roles-and-state",
+              "data-and-variants",
+              "actions-and-outcomes",
+              "observable-oracles",
+              "isolation-and-cleanup",
+              "terminology-and-ui",
+              "traceability"
+            ]
+          },
+          status: {
+            enum: [
+              "confirmed",
+              "not-applicable",
+              "unresolved"
+            ]
+          },
+          evidence: {
+            type: "string",
+            minLength: 1
+          }
+        },
+        required: [
+          "id",
+          "status",
+          "evidence"
+        ],
+        additionalProperties: false
+      },
+      minItems: 8,
+      maxItems: 8
+    },
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            minLength: 1
+          },
+          source: {
+            type: "string",
+            minLength: 1
+          },
+          line: {
+            type: "integer",
+            minimum: 1
+          },
+          question: {
+            type: "string",
+            minLength: 1
+          },
+          reason: {
+            type: "string",
+            minLength: 1
+          }
+        },
+        required: [
+          "id",
+          "source",
+          "line",
+          "question",
+          "reason"
+        ],
+        additionalProperties: false
+      }
+    },
+    decisions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          questionId: {
+            type: "string",
+            minLength: 1
+          },
+          answer: {
+            type: "string",
+            minLength: 1
+          },
+          confirmedBy: {
+            type: "string",
+            minLength: 1
+          }
+        },
+        required: [
+          "questionId",
+          "answer",
+          "confirmedBy"
+        ],
+        additionalProperties: false
+      }
+    },
+    technicalDraft: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            pattern: "^[^\\\\]+\\.feature$"
+          },
+          content: {
+            type: "string",
+            minLength: 1
+          },
+          traceability: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                source: {
+                  type: "string",
+                  minLength: 1
+                },
+                line: {
+                  type: "integer",
+                  minimum: 1
+                },
+                technicalLine: {
+                  type: "integer",
+                  minimum: 1
+                }
+              },
+              required: [
+                "source",
+                "line",
+                "technicalLine"
+              ],
+              additionalProperties: false
+            },
+            minItems: 1
+          }
+        },
+        required: [
+          "path",
+          "content",
+          "traceability"
+        ],
+        additionalProperties: false
+      }
+    }
+  },
+  required: [
+    "schemaVersion",
+    "status",
+    "sources",
+    "checks",
+    "questions",
+    "decisions",
+    "technicalDraft"
+  ],
+  additionalProperties: false
+};
+
+// scripts/testing/conversion.mjs
+var import__ = __toESM(require__(), 1);
+import { createHash as createHash2 } from "node:crypto";
+var conversionHash = (value) => createHash2("sha256").update(JSON.stringify(value)).digest("hex");
+var sourceHash = (text) => createHash2("sha256").update(text).digest("hex");
+var validate = new import__.default({ strict: false }).compile(bdd_conversion_schema_default);
+var safePath = (value) => !value.startsWith("/") && !/^[a-z]:/i.test(value) && !value.split(/[\\/]/).some((part) => part === ".." || part === "." || part === "");
+function checkConversion(report, sources, previous = null, approval = null) {
+  const errors = [];
+  const fail = (message) => errors.push(message);
+  if (!validate(report)) return { valid: false, status: "blocked", specReady: false, errors: validate.errors.map((item) => `${item.instancePath} ${item.message}`), questions: [] };
+  if (new Set(report.checks.map((item) => item.id)).size !== 8) fail("Every readiness check must occur exactly once");
+  if (new Set(report.sources.map((item) => item.path)).size !== report.sources.length) fail("Duplicate source paths");
+  if (new Set(report.questions.map((item) => item.id)).size !== report.questions.length) fail("Duplicate question IDs");
+  const inputs = new Map(sources.map((item) => [item.path, item]));
+  if (inputs.size !== sources.length || inputs.size !== report.sources.length) fail("Source set does not match conversion inputs");
+  for (const item of report.sources) {
+    if (!inputs.has(item.path) || sourceHash(inputs.get(item.path).text) !== item.sha256) fail(`Stale or missing source: ${item.path}`);
+  }
+  const checkReference = (item) => {
+    const source = inputs.get(item.source);
+    if (!source || item.line > source.text.split("\n").length) fail(`Invalid source reference: ${item.source}:${item.line}`);
+  };
+  for (const item of report.questions) checkReference(item);
+  if (report.status === "needs-clarification") {
+    if (!report.questions.length) fail("Clarification requires at least one question");
+    if (report.technicalDraft.length) fail("Blocked conversion must not publish technical drafts");
+    return { valid: false, status: errors.length ? "blocked" : "needs-clarification", specReady: false, errors, questions: report.questions };
+  }
+  if (report.questions.length || report.checks.some((item) => item.status === "unresolved")) fail("Unresolved questions or readiness checks");
+  if (!report.technicalDraft.length) fail("Ready conversion requires a technical draft");
+  const paths = report.technicalDraft.map((item) => item.path);
+  if (new Set(paths).size !== paths.length || paths.some((item) => !safePath(item))) fail("Unsafe or duplicate technical draft paths");
+  for (const draft of report.technicalDraft) {
+    const lines = draft.content.split("\n");
+    for (const item of draft.traceability) {
+      checkReference(item);
+      if (item.technicalLine > lines.length) fail(`Invalid technical reference: ${draft.path}:${item.technicalLine}`);
+    }
+    for (const [index, line] of lines.entries()) {
+      if (/^\s*(?:(?:Given|When|Then|And|But)\s+|Examples:|\||""")/.test(line) && !draft.traceability.some((item) => item.technicalLine === index + 1)) fail(`Missing step traceability: ${draft.path}:${index + 1}`);
+    }
+  }
+  if (errors.length) return { valid: false, status: "blocked", specReady: false, errors, questions: [] };
+  const registry = inspectSources(report.technicalDraft.map((item) => ({ path: item.path, text: item.content })), previous);
+  for (const issue of registry.issues) fail(`${issue.source}:${issue.line} ${issue.code}`);
+  if (!registry.scenarios.length) fail("No scenarios");
+  for (const item of registry.scenarios) {
+    if (item.conflict) fail(`Conflicting scenario: ${item.id}`);
+    if (!item.variants[0].expectations.length) fail(`No observable outcomes: ${item.id}`);
+    if (item.expectedInstances < 1) fail(`Empty Examples: ${item.id}`);
+  }
+  const signatures = registry.scenarios.map((item) => ({ id: item.id, signature: item.variants[0].signature }));
+  const digest = conversionHash(report);
+  let approved = false;
+  if (approval) {
+    approved = approval.status === "approved" && typeof approval.owner === "string" && approval.owner.trim().length > 0 && typeof approval.approvedAt === "string" && /^\d{4}-\d{2}-\d{2}T/.test(approval.approvedAt) && Number.isFinite(Date.parse(approval.approvedAt)) && approval.conversionHash === digest && JSON.stringify(approval.scenarios) === JSON.stringify(signatures);
+    if (!approved) fail("Approval must identify an analyst and bind the current conversion hash and scenario signatures");
+  }
+  const valid = errors.length === 0;
+  return { valid, status: !valid ? "blocked" : approved ? "ready-for-handoff" : "needs-approval", specReady: valid && approved, errors, questions: [], conversionHash: digest, scenarios: signatures, registry };
+}
+
 // scripts/testing/spec-cli.mjs
-var sha256 = (content) => createHash2("sha256").update(content).digest("hex");
+var sha256 = (content) => createHash3("sha256").update(content).digest("hex");
 var stableJson = (value) => `${JSON.stringify(value, null, 2)}
 `;
 var validators = /* @__PURE__ */ new Map();
 var validateSpecificationData = (type, value) => {
-  const schema = type === "specification-manifest" ? specification_manifest_schema_default : type === "bdd-registry" ? bdd_registry_schema_default : null;
+  const schema = type === "specification-manifest" ? specification_manifest_schema_default : type === "bdd-registry" ? bdd_registry_schema_default : type === "bdd-conversion" ? bdd_conversion_schema_default : null;
   if (!schema) throw new Error(`Unsupported specification data type: ${type}`);
-  if (!validators.has(type)) validators.set(type, new import__.default({
+  if (!validators.has(type)) validators.set(type, new import__2.default({
     strict: false,
     formats: { uri: true, "date-time": true }
   }).compile(schema));
-  const validate = validators.get(type);
-  return { valid: validate(value), errors: validate.errors ?? [] };
+  const validate2 = validators.get(type);
+  return { valid: validate2(value), errors: validate2.errors ?? [] };
 };
 var validateGitLabReference = (reference) => {
   const errors = [];
@@ -19780,7 +20050,7 @@ var compareFeatureRegistry = (features, registry) => {
   for (const id of actual.keys()) if (!expected.has(id)) errors.push(`Feature set has unregistered scenario: ${id}`);
   return errors;
 };
-var prepareSpecificationBundle = async ({ metadata, registry, features, diagnostics, outputRoot }) => {
+var prepareSpecificationBundle = async ({ metadata, registry, features, diagnostics, outputRoot, conversion = null, conversionApproval = null, conversionSources = [] }) => {
   const bundleRoot = path.resolve(outputRoot);
   const registryCheck = validateSpecificationData("bdd-registry", registry);
   if (!registryCheck.valid) throw new Error(`Invalid registry: ${JSON.stringify(registryCheck.errors)}`);
@@ -19791,7 +20061,18 @@ var prepareSpecificationBundle = async ({ metadata, registry, features, diagnost
   if (featureErrors.length) throw new Error(`Feature/registry mismatch: ${featureErrors.join("; ")}`);
   const registryIssues = registry.issues ?? [];
   const conflicts = registry.scenarios.filter((scenario) => scenario.conflict).length;
+  if (conversion) {
+    const readiness = checkConversion(conversion, conversionSources, null, conversionApproval);
+    if (!readiness.specReady) throw new Error(`Conversion is not ready for handoff: ${readiness.errors.join("; ") || readiness.status}`);
+    const expected = conversion.technicalDraft;
+    if (expected.length !== features.length || expected.some((draft) => !features.some((feature) => feature.path === draft.path && feature.content === draft.content))) throw new Error("Features differ from approved conversion");
+    if (JSON.stringify(metadata.sources) !== JSON.stringify(conversion.sources)) throw new Error("Metadata sources differ from conversion");
+    const signatures = registry.scenarios.map((item) => ({ id: item.id, signature: item.variants[0]?.signature }));
+    if (JSON.stringify(signatures) !== JSON.stringify(readiness.scenarios)) throw new Error("Registry differs from approved conversion");
+    if (metadata.approval.owner !== conversionApproval.owner || metadata.approval.approvedAt !== conversionApproval.approvedAt || metadata.approval.status !== "approved") throw new Error("Metadata approval differs from conversion");
+  }
   const files = [
+    ...conversion ? [{ path: "conversion.json", content: stableJson(conversion) }, { path: "conversion-approval.json", content: stableJson(conversionApproval) }] : [],
     { path: "registry.json", content: stableJson(registry) },
     { path: "diagnostics.json", content: stableJson({ ...diagnostics, issues: registryIssues, conflicts }) },
     ...features.map((feature, index) => ({ path: feature.path || `features/specification-${index + 1}.feature`, content: feature.content }))
@@ -19808,7 +20089,8 @@ var prepareSpecificationBundle = async ({ metadata, registry, features, diagnost
   const approved = metadata.approval?.status === "approved";
   const manifest = {
     schemaVersion: 1,
-    runtimeVersion: "1.0.0",
+    runtimeVersion: "1.1.0",
+    ...conversion ? { conversion: { report: "conversion.json", approval: "conversion-approval.json" } } : {},
     gitlab: metadata.gitlab,
     approval: metadata.approval,
     sources: metadata.sources,
@@ -19847,6 +20129,7 @@ var validateSpecificationBundle = async (root) => {
   const errors = check.errors.map((error) => `${error.instancePath || "/"} ${error.message}`);
   const featureSources = [];
   let registry = null;
+  const supporting = /* @__PURE__ */ new Map();
   for (const artifact of manifest.artifacts ?? []) {
     const target = path.resolve(bundleRoot, artifact.path);
     if (path.relative(bundleRoot, target).startsWith("..")) errors.push(`Unsafe artifact path: ${artifact.path}`);
@@ -19856,6 +20139,7 @@ var validateSpecificationBundle = async (root) => {
         if (sha256(content) !== artifact.sha256) errors.push(`Hash mismatch: ${artifact.path}`);
         else if (artifact.kind === "feature") featureSources.push({ path: artifact.path, content: content.toString("utf8") });
         else if (artifact.kind === "registry") registry = JSON.parse(content.toString("utf8"));
+        else if (artifact.kind === "supporting" && manifest.conversion && [manifest.conversion.report, manifest.conversion.approval].includes(artifact.path)) supporting.set(artifact.path, JSON.parse(content.toString("utf8")));
       } catch (error) {
         errors.push(`Cannot read ${artifact.path}: ${error.message}`);
       }
@@ -19863,6 +20147,18 @@ var validateSpecificationBundle = async (root) => {
   }
   if (registry && featureSources.length) errors.push(...compareFeatureRegistry(featureSources, registry));
   else errors.push("Bundle must contain registry and feature artifacts");
+  if (manifest.conversion) {
+    const report = supporting.get(manifest.conversion.report);
+    const approval = supporting.get(manifest.conversion.approval);
+    const reportCheck = report ? validateSpecificationData("bdd-conversion", report) : { valid: false };
+    if (!reportCheck.valid || !approval) errors.push("Missing or invalid conversion artifacts");
+    else {
+      if (report.status !== "ready" || report.questions.length || report.checks.some((item) => item.status === "unresolved") || new Set(report.checks.map((item) => item.id)).size !== 8) errors.push("Unresolved conversion");
+      if (approval.status !== "approved" || approval.conversionHash !== conversionHash(report) || approval.owner !== manifest.approval.owner || approval.approvedAt !== manifest.approval.approvedAt || JSON.stringify(approval.scenarios) !== JSON.stringify(manifest.scenarios)) errors.push("Stale conversion approval");
+      if (JSON.stringify(report.sources) !== JSON.stringify(manifest.sources)) errors.push("Conversion source mismatch");
+      if (report.technicalDraft.length !== featureSources.length || report.technicalDraft.some((draft) => !featureSources.some((feature) => feature.path === draft.path && feature.content === draft.content))) errors.push("Conversion feature mismatch");
+    }
+  }
   if (manifest.gitlab && !validateGitLabReference(manifest.gitlab).valid) errors.push(...validateGitLabReference(manifest.gitlab).errors);
   return { valid: errors.length === 0 && manifest.specReady === true, specReady: manifest.specReady === true, errors, manifest };
 };
@@ -19875,7 +20171,7 @@ var parseArgs = (argv) => {
       options.write = true;
       continue;
     }
-    if (!["--input", "--previous", "--type", "--bundle", "--metadata", "--registry", "--diagnostics", "--feature", "--output"].includes(flag) || !args[index + 1] || args[index + 1].startsWith("--")) throw new Error(`Invalid argument ${flag}`);
+    if (!["--input", "--previous", "--type", "--bundle", "--metadata", "--registry", "--diagnostics", "--feature", "--output", "--conversion", "--approval"].includes(flag) || !args[index + 1] || args[index + 1].startsWith("--")) throw new Error(`Invalid argument ${flag}`);
     const key = flag.slice(2);
     if (key === "input" || key === "feature") options[key].push(args[++index]);
     else options[key] = args[++index];
@@ -19886,7 +20182,10 @@ async function main(argv = process.argv.slice(2)) {
   const { command, options } = parseArgs(argv);
   const json = async (file) => JSON.parse(await readFile(file, "utf8"));
   let result;
-  if (command === "inspect-bdd") {
+  if (command === "check-bdd") {
+    if (!options.conversion || !options.input.length) throw new Error("check-bdd requires --conversion and original --input paths; an AI workflow produces the conversion report first");
+    result = checkConversion(await json(options.conversion), await Promise.all(options.input.map(async (file) => ({ path: file, text: await readFile(file, "utf8") }))), options.previous ? await json(options.previous) : null, options.approval ? await json(options.approval) : null);
+  } else if (command === "inspect-bdd") {
     if (!options.input.length) throw new Error("Provide at least one --input");
     const sources = await Promise.all(options.input.map(async (file) => ({ path: file, text: await readFile(file, "utf8") })));
     result = inspectSources(sources, options.previous ? await json(options.previous) : null);
@@ -19906,9 +20205,12 @@ async function main(argv = process.argv.slice(2)) {
       registry: await json(options.registry),
       diagnostics: await json(options.diagnostics),
       features: await Promise.all(options.feature.map(async (file) => ({ path: `features/${path.basename(file)}`, content: await readFile(file, "utf8") }))),
-      outputRoot: path.resolve(options.output)
+      outputRoot: path.resolve(options.output),
+      conversion: options.conversion ? await json(options.conversion) : null,
+      conversionApproval: options.approval ? await json(options.approval) : null,
+      conversionSources: await Promise.all(options.input.map(async (file) => ({ path: file, text: await readFile(file, "utf8") })))
     });
-  } else throw new Error("Usage: specification CLI <inspect-bdd|validate-data|validate-gitlab-ref|prepare-bundle|validate-bundle>");
+  } else throw new Error("Usage: specification CLI <check-bdd|inspect-bdd|validate-data|validate-gitlab-ref|prepare-bundle|validate-bundle>");
   process.stdout.write(stableJson(result));
   if (result.valid === false) process.exitCode = 1;
   return result;
@@ -19921,6 +20223,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   });
 }
 export {
+  checkConversion,
   checkCoverage,
   inspectSources,
   main,
